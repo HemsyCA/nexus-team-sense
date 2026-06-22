@@ -1,8 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Sparkles, ArrowRight, Play } from "lucide-react";
 import { AppLayout, Card } from "@/components/AppLayout";
+import { requireAuth } from "@/lib/auth-guard";
 
 export const Route = createFileRoute("/simulaciones")({
+  beforeLoad: requireAuth,
   head: () => ({
     meta: [
       { title: "Simulaciones · NEXUS LEAD IA" },
@@ -37,7 +39,7 @@ function SimPage() {
         <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
           <textarea
             defaultValue="Cambiar el horario de reuniones de 8:00 AM a 7:00 AM"
-            className="resize-none rounded-xl border border-border bg-background px-4 py-3 text-sm outline-none transition focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/15"
+            className="resize-none rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground transition focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/15"
             rows={2}
           />
           <button className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-brand-navy px-6 py-3 text-sm font-semibold text-white transition hover:bg-brand-navy/90">

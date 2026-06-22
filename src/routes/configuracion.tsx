@@ -2,8 +2,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { ShieldCheck, EyeOff, Lock, Bell, FileCheck2 } from "lucide-react";
 import { AppLayout, Card } from "@/components/AppLayout";
+import { requireAuth } from "@/lib/auth-guard";
 
 export const Route = createFileRoute("/configuracion")({
+  beforeLoad: requireAuth,
   head: () => ({
     meta: [
       { title: "Privacidad · NEXUS LEAD IA" },
@@ -32,7 +34,7 @@ function PrivacyPage() {
             <p className="text-[11px] font-bold uppercase tracking-wider text-brand-blue">
               Promesa de Anonimato
             </p>
-            <h2 className="mt-2 text-xl font-bold leading-snug">
+            <h2 className="mt-2 text-xl font-bold text-black">
               Los comentarios son visibles para el líder solo mediante códigos
               anónimos. La identidad real no se muestra en el feed ni en el
               dashboard.

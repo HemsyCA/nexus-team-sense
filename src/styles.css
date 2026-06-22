@@ -24,6 +24,17 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
 
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
   --color-brand-navy: var(--brand-navy);
   --color-brand-blue: var(--brand-blue);
   --color-brand-purple: var(--brand-purple);
@@ -45,6 +56,17 @@
   --border: oklch(0.93 0.01 250);
   --input: oklch(0.93 0.01 250);
   --ring: oklch(0.72 0.15 230);
+
+  --primary: var(--brand-navy);
+  --primary-foreground: oklch(0.98 0.005 240);
+  --secondary: var(--muted);
+  --secondary-foreground: var(--foreground);
+  --accent: oklch(0.94 0.02 240);
+  --accent-foreground: var(--foreground);
+  --destructive: var(--brand-red);
+  --destructive-foreground: oklch(0.98 0.005 240);
+  --popover: var(--card);
+  --popover-foreground: var(--card-foreground);
 
   /* NEXUS LEAD IA brand palette */
   --brand-navy: oklch(0.22 0.06 265);        /* #0f172a deep navy */

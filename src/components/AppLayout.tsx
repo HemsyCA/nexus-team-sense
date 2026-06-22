@@ -1,16 +1,17 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
-  LayoutDashboard,
   MessagesSquare,
   Sparkles,
   BarChart3,
   GitBranch,
   Shield,
   Bell,
-  Search,
   Home as HomeIcon,
+  LogOut,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+
+import { signOut } from "@/lib/auth";
 
 const nav = [
   { to: "/home", label: "Inicio", icon: HomeIcon },
@@ -31,6 +32,20 @@ export function AppLayout({
   children: ReactNode;
 }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const navigate = useNavigate();
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  async function handleLogout() {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      await signOut();
+      await navigate({ to: "/" });
+    } catch (error) {
+      console.error("Error al cerrar sesión:", error);
+      setLoggingOut(false);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-brand-bg text-foreground">
@@ -108,6 +123,18 @@ export function AppLayout({
             <button className="grid size-10 place-items-center rounded-full border border-border bg-card text-muted-foreground transition hover:text-foreground">
               <Bell className="size-4" />
             </button>
+            <button
+              type="button"
+              onClick={handleLogout}
+              disabled={loggingOut}
+              title="Cerrar sesión"
+              className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-2 text-xs font-medium text-muted-foreground transition hover:border-brand-red/40 hover:text-brand-red disabled:cursor-not-allowed disabled:opacity-60 sm:px-4"
+            >
+              <LogOut className="size-4" />
+              <span className="hidden sm:inline">
+                {loggingOut ? "Saliendo…" : "Cerrar sesión"}
+              </span>
+            </button>
             <div className="grid size-10 place-items-center rounded-full bg-gradient-to-br from-brand-blue to-brand-purple text-sm font-bold text-white outline-2 outline-white">
               LD
             </div>
@@ -151,7 +178,7 @@ export function Card({
   return (
     <div
       className={
-        "rounded-2xl border border-border bg-card p-6 shadow-sm shadow-slate-900/[0.02] " +
+        "rounded-2xl border border-border bg-card p-6 text-card-foreground shadow-sm shadow-slate-900/[0.02] " +
         className
       }
     >

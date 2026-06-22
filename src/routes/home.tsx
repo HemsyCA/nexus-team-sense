@@ -10,8 +10,10 @@ import {
   Sparkles,
 } from "lucide-react";
 import { AppLayout, Card } from "@/components/AppLayout";
+import { requireAuth } from "@/lib/auth-guard";
 
 export const Route = createFileRoute("/home")({
+  beforeLoad: requireAuth,
   head: () => ({
     meta: [
       { title: "Inicio · NEXUS LEAD IA" },
@@ -165,12 +167,12 @@ function HomePage() {
               <Sparkles className="size-5" />
             </div>
             <div>
-              <p className="text-sm font-bold">Nexus IA</p>
-              <p className="text-[11px] text-white/50">Coaching predictivo</p>
+              <p className="text-sm font-bold text-black">Nexus IA</p>
+              <p className="text-[11px] text-brand-blue/100">Coaching predictivo</p>
             </div>
           </div>
 
-          <p className="mt-6 text-sm leading-relaxed text-white/80">
+          <p className="mt-6 text-sm leading-relaxed text-brand-navy/100">
             Hoy detecté un patrón de fatiga en Operaciones vinculado a las reuniones
             tempranas. ¿Te muestro una simulación de horario alternativo?
           </p>
@@ -185,7 +187,7 @@ function HomePage() {
             </Link>
             <Link
               to="/simulaciones"
-              className="flex items-center justify-between rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-medium text-white transition hover:bg-white/10"
+              className="flex items-center justify-between rounded-xl bg-brand-blue px-4 py-3 text-sm font-semibold text-brand-navy transition hover:bg-brand-blue/90"
             >
               Ejecutar simulación
               <ArrowRight className="size-4" />

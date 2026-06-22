@@ -1,8 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AlertTriangle, TrendingUp, TrendingDown, Download } from "lucide-react";
 import { AppLayout, Card } from "@/components/AppLayout";
+import { NexusChat } from "@/components/NexusChat";
+import { requireAuth } from "@/lib/auth-guard";
 
 export const Route = createFileRoute("/dashboard")({
+  beforeLoad: requireAuth,
   head: () => ({
     meta: [
       { title: "Dashboard · NEXUS LEAD IA" },
@@ -222,6 +225,17 @@ function DashboardPage() {
             ))}
           </ul>
         </Card>
+      </section>
+
+      {/* Nexus IA Chat */}
+      <section className="relative z-10 mt-6 mb-24 lg:mb-0">
+        <div className="mb-4">
+          <h2 className="text-lg font-bold">Chat Nexus IA</h2>
+          <p className="text-xs text-muted-foreground">
+            Consulta en tiempo real sobre clima, estrés y bienestar del equipo
+          </p>
+        </div>
+        <NexusChat />
       </section>
     </AppLayout>
   );

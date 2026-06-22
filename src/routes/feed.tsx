@@ -2,8 +2,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { Filter, Heart, HandHelping, ThumbsUp, Send } from "lucide-react";
 import { AppLayout, Card } from "@/components/AppLayout";
+import { requireAuth } from "@/lib/auth-guard";
 
 export const Route = createFileRoute("/feed")({
+  beforeLoad: requireAuth,
   head: () => ({
     meta: [
       { title: "Feed Anónimo · NEXUS LEAD IA" },
@@ -113,7 +115,7 @@ function FeedPage() {
               </div>
               <div className="flex-1">
                 <textarea
-                  className="w-full resize-none rounded-xl border border-border bg-background px-4 py-3 text-sm outline-none transition focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/15"
+                  className="w-full resize-none rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground transition focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/15"
                   rows={3}
                   placeholder="Comparte cómo te sentiste hoy en el trabajo… (publicación 100% anónima)"
                 />
@@ -272,7 +274,7 @@ function PostCard({ post }: { post: Post }) {
           </p>
           <input
             placeholder="Escribir respuesta anónima…"
-            className="mt-4 w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm outline-none transition focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/15"
+            className="mt-4 w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm text-foreground outline-none placeholder:text-muted-foreground transition focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/15"
           />
         </>
       )}

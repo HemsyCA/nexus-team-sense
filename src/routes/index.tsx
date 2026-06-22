@@ -1,7 +1,12 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Lock, Mail, ShieldCheck } from "lucide-react";
+import { useState } from "react";
+
+import { redirectIfAuthenticated } from "@/lib/auth-guard";
+import { supabase } from "@/lib/supabase";
 
 export const Route = createFileRoute("/")({
+  beforeLoad: redirectIfAuthenticated,
   head: () => ({
     meta: [
       { title: "NEXUS LEAD IA — Acceso" },
@@ -21,6 +26,32 @@ export const Route = createFileRoute("/")({
 });
 
 function LoginPage() {
+  const navigate = useNavigate();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+
+    const { error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    setLoading(false);
+
+    if (authError) {
+      setError("Correo o contraseña incorrectos. Verifica tus credenciales.");
+      return;
+    }
+
+    await navigate({ to: "/home" });
+  }
+
   return (
     <div className="relative grid min-h-screen bg-brand-navy text-white lg:grid-cols-2">
       {/* Left brand panel */}
@@ -102,24 +133,35 @@ function LoginPage() {
             Accede con tu cuenta corporativa para continuar.
           </p>
 
-          <form
-            className="mt-8 space-y-4"
-            onSubmit={(e) => e.preventDefault()}
-          >
+          <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
             <Field icon={<Mail className="size-4" />} label="Correo corporativo">
               <input
                 type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 placeholder="nombre@empresa.com"
-                className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                required
+                autoComplete="email"
+                className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
               />
             </Field>
             <Field icon={<Lock className="size-4" />} label="Contraseña">
               <input
                 type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                required
+                autoComplete="current-password"
+                className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
               />
             </Field>
+
+            {error && (
+              <p className="rounded-lg border border-brand-red/30 bg-brand-red/5 px-3 py-2 text-xs text-brand-red">
+                {error}
+              </p>
+            )}
 
             <div className="flex items-center justify-between text-xs">
               <label className="flex items-center gap-2 text-muted-foreground">
@@ -131,12 +173,13 @@ function LoginPage() {
               </a>
             </div>
 
-            <Link
-              to="/home"
-              className="block w-full rounded-xl bg-brand-navy py-3.5 text-center text-sm font-semibold text-white shadow-lg shadow-brand-navy/20 transition hover:bg-brand-navy/90"
+            <button
+              type="submit"
+              disabled={loading}
+              className="block w-full rounded-xl bg-brand-navy py-3.5 text-center text-sm font-semibold text-white shadow-lg shadow-brand-navy/20 transition hover:bg-brand-navy/90 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Ingresar
-            </Link>
+              {loading ? "Ingresando…" : "Ingresar"}
+            </button>
 
             <div className="flex items-center gap-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               <span className="h-px flex-1 bg-border" />
@@ -146,7 +189,7 @@ function LoginPage() {
 
             <button
               type="button"
-              className="flex w-full items-center justify-center gap-3 rounded-xl border border-border bg-card py-3 text-sm font-medium transition hover:bg-muted"
+              className="flex w-full items-center justify-center gap-3 rounded-xl border border-border bg-card py-3 text-sm font-medium text-foreground transition hover:bg-muted"
             >
               <GoogleIcon />
               Continuar con Google
@@ -178,8 +221,8 @@ function Field({
       <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
         {label}
       </div>
-      <div className="mt-1 flex items-center gap-2 text-muted-foreground">
-        {icon}
+      <div className="mt-1 flex items-center gap-2">
+        <span className="text-muted-foreground">{icon}</span>
         {children}
       </div>
     </label>
