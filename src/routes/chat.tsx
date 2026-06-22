@@ -34,7 +34,7 @@ function ChatPage() {
             <div className="text-xs font-semibold uppercase tracking-wider text-brand-blue">
               Modelo Nexus IA · Gemini
             </div>
-            <p className="mt-3 text-sm leading-relaxed text-white/80">
+            <p className="mt-3 text-sm leading-relaxed text-brand-navy/100">
               Tono profesional, breve y empático. Las respuestas se basan en
               comentarios anónimos del equipo y datos agregados — nunca
               identifica personas.

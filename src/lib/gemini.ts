@@ -1,5 +1,5 @@
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-const model = "gemini-2.0-flash";
+const model = "gemini-1.5-flash-latest";
 
 export const NEXUS_SYSTEM_PROMPT =
   "Eres Nexus IA, asistente especializado en clima laboral, bienestar organizacional y liderazgo. Analizas datos de equipos y das recomendaciones a líderes sobre motivación, burnout, estrés y comunicación. Eres profesional, empático y directo.";
