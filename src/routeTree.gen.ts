@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as SimulacionesRouteImport } from './routes/simulaciones'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
@@ -20,6 +21,11 @@ import { Route as ChatRouteImport } from './routes/chat'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as OnboardingCompleteRouteImport } from './routes/onboarding/complete'
 
+const VerifyEmailRoute = VerifyEmailRouteImport.update({
+  id: '/verify-email',
+  path: '/verify-email',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SimulacionesRoute = SimulacionesRouteImport.update({
   id: '/simulaciones',
   path: '/simulaciones',
@@ -81,6 +87,7 @@ export interface FileRoutesByFullPath {
   '/onboarding': typeof OnboardingRouteWithChildren
   '/register': typeof RegisterRoute
   '/simulaciones': typeof SimulacionesRoute
+  '/verify-email': typeof VerifyEmailRoute
   '/onboarding/complete': typeof OnboardingCompleteRoute
 }
 export interface FileRoutesByTo {
@@ -93,6 +100,7 @@ export interface FileRoutesByTo {
   '/onboarding': typeof OnboardingRouteWithChildren
   '/register': typeof RegisterRoute
   '/simulaciones': typeof SimulacionesRoute
+  '/verify-email': typeof VerifyEmailRoute
   '/onboarding/complete': typeof OnboardingCompleteRoute
 }
 export interface FileRoutesById {
@@ -106,6 +114,7 @@ export interface FileRoutesById {
   '/onboarding': typeof OnboardingRouteWithChildren
   '/register': typeof RegisterRoute
   '/simulaciones': typeof SimulacionesRoute
+  '/verify-email': typeof VerifyEmailRoute
   '/onboarding/complete': typeof OnboardingCompleteRoute
 }
 export interface FileRouteTypes {
@@ -120,6 +129,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/register'
     | '/simulaciones'
+    | '/verify-email'
     | '/onboarding/complete'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -132,6 +142,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/register'
     | '/simulaciones'
+    | '/verify-email'
     | '/onboarding/complete'
   id:
     | '__root__'
@@ -144,6 +155,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/register'
     | '/simulaciones'
+    | '/verify-email'
     | '/onboarding/complete'
   fileRoutesById: FileRoutesById
 }
@@ -157,10 +169,18 @@ export interface RootRouteChildren {
   OnboardingRoute: typeof OnboardingRouteWithChildren
   RegisterRoute: typeof RegisterRoute
   SimulacionesRoute: typeof SimulacionesRoute
+  VerifyEmailRoute: typeof VerifyEmailRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/verify-email': {
+      id: '/verify-email'
+      path: '/verify-email'
+      fullPath: '/verify-email'
+      preLoaderRoute: typeof VerifyEmailRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/simulaciones': {
       id: '/simulaciones'
       path: '/simulaciones'
@@ -256,6 +276,7 @@ const rootRouteChildren: RootRouteChildren = {
   OnboardingRoute: OnboardingRouteWithChildren,
   RegisterRoute: RegisterRoute,
   SimulacionesRoute: SimulacionesRoute,
+  VerifyEmailRoute: VerifyEmailRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

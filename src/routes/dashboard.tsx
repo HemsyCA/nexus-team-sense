@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AlertTriangle, TrendingUp, TrendingDown, Download } from "lucide-react";
 import { AppLayout, Card } from "@/components/AppLayout";
+import { NexusChat } from "@/components/NexusChat";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { requireAuthAndOnboarded } from "@/lib/auth-guard";
 

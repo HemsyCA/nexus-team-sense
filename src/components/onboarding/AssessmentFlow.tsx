@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Send, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -94,12 +94,47 @@ const stepTitle = [
 
 export function AssessmentFlow() {
   const [step, setStep] = useState(1);
+  const [stepStarted, setStepStarted] = useState(false);
   const [eqAnswers, setEqAnswers] = useState<EQIAssessment>(Array(15).fill(0));
   const [mlqAnswers, setMLQAnswers] = useState<MLQAssessment>(Array(12).fill(-1));
   const [tkiAnswers, setTKIAnswers] = useState<TKIAssessment>(Array(10).fill(null));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+
+  const stepIntros = [
+    {
+      author: "Reuven Bar-On, Ph.D. (1997)",
+      title: "Test de Inteligencia Emocional",
+      description:
+        "Desarrollado por el psicólogo Reuven Bar-On, este test mide tu capacidad para reconocer, entender y gestionar emociones — tanto las propias como las de tu equipo. Es uno de los instrumentos más citados en psicología organizacional.",
+      instructions:
+        "Lee cada afirmación y selecciona con qué frecuencia describes tu comportamiento habitual en el trabajo. No hay respuestas correctas ni incorrectas.",
+      duration: "~4 minutos | 15 preguntas | Escala 1-5",
+    },
+    {
+      author: "Bernard Bass & Bruce Avolio (1995)",
+      title: "Cuestionario Multifactor de Liderazgo",
+      description:
+        "Creado por Bass y Avolio en la Universidad de Binghamton, el MLQ es el instrumento más utilizado a nivel mundial para identificar el estilo de liderazgo predominante. Distingue entre liderazgo transformacional, transaccional y pasivo (laissez-faire).",
+      instructions:
+        "Piensa en cómo actúas habitualmente cuando lideras o trabajas con otros. Selecciona la frecuencia con que cada comportamiento te describe.",
+      duration: "~3 minutos | 12 preguntas | Escala 0-4",
+    },
+    {
+      author: "Kenneth Thomas & Ralph Kilmann (1974)",
+      title: "Instrumento de Modos de Conflicto",
+      description:
+        "Desarrollado en la Universidad de Pittsburgh, el TKI identifica tu forma natural de responder ante situaciones de conflicto. Revela si tiendes a competir, colaborar, comprometerte, evitar o ceder — información clave para predecir dinámicas de equipo.",
+      instructions:
+        "En cada par, elige la afirmación (A o B) que mejor describa tu comportamiento típico ante un desacuerdo o conflicto en el trabajo. Elige con honestidad, no lo que crees que deberías hacer.",
+      duration: "~3 minutos | 10 pares | Elección A o B",
+    },
+  ];
+
+  useEffect(() => {
+    setStepStarted(false);
+  }, [step]);
 
   const completedStep = useMemo(() => {
     if (step === 1) {
@@ -187,7 +222,37 @@ export function AssessmentFlow() {
       ) : null}
 
       <div className="space-y-6">
-        {step === 1 && (
+        {!stepStarted ? (
+          <section className="space-y-6 rounded-3xl border border-border bg-card p-6">
+            <p className="text-sm uppercase tracking-[0.25em] text-muted-foreground">Autor</p>
+            <h2 className="text-2xl font-bold tracking-tight">{stepIntros[step - 1].title}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{stepIntros[step - 1].author}</p>
+
+            <div className="rounded-3xl border border-border/80 bg-background p-6">
+              <p className="text-sm leading-7 text-foreground">{stepIntros[step - 1].description}</p>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
+              <div className="rounded-3xl border border-border/80 bg-muted p-6 text-sm text-muted-foreground">
+                <p className="font-semibold text-foreground">Qué mide</p>
+                <p className="mt-3">{stepIntros[step - 1].description}</p>
+              </div>
+              <div className="rounded-3xl border border-border/80 bg-muted p-6 text-sm text-muted-foreground">
+                <p className="font-semibold text-foreground">Duración estimada</p>
+                <p className="mt-3">{stepIntros[step - 1].duration}</p>
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-border/80 bg-background p-6">
+              <p className="text-sm font-semibold text-foreground">Instrucciones</p>
+              <p className="mt-3 text-sm leading-7 text-muted-foreground">{stepIntros[step - 1].instructions}</p>
+            </div>
+
+            <Button onClick={() => setStepStarted(true)} className="w-full sm:w-auto">
+              Comenzar test →
+            </Button>
+          </section>
+        ) : step === 1 ? (
           <section className="space-y-6 rounded-3xl border border-border bg-card p-6">
             <p className="text-sm font-medium text-muted-foreground">Escala Likert 1-5</p>
             {eqQuestions.map((question, index) => (
@@ -213,9 +278,7 @@ export function AssessmentFlow() {
               </div>
             ))}
           </section>
-        )}
-
-        {step === 2 && (
+        ) : step === 2 ? (
           <section className="space-y-6 rounded-3xl border border-border bg-card p-6">
             <p className="text-sm font-medium text-muted-foreground">Escala Likert 0-4</p>
             {mlqQuestions.map((question, index) => (
@@ -241,9 +304,7 @@ export function AssessmentFlow() {
               </div>
             ))}
           </section>
-        )}
-
-        {step === 3 && (
+        ) : (
           <section className="space-y-6 rounded-3xl border border-border bg-card p-6">
             {tkiPairs.map((pair, index) => (
               <div key={pair.a} className="space-y-3 rounded-3xl border border-border/80 bg-background px-4 py-4">

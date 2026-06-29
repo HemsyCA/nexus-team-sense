@@ -36,6 +36,10 @@ function RegisterPage() {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        data: { full_name: name },
+        emailRedirectTo: `${window.location.origin}/onboarding`,
+      },
     });
 
     setLoading(false);
@@ -50,8 +54,7 @@ function RegisterPage() {
       return;
     }
 
-    // Si la confirmación por email es necesaria, también redirigimos a onboarding.
-    await navigate({ to: "/onboarding" });
+    await navigate({ to: `/verify-email?email=${encodeURIComponent(email)}` });
   }
 
   return (
