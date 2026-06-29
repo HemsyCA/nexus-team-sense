@@ -188,13 +188,25 @@ function LoginPage() {
               <span className="h-px flex-1 bg-border" />
             </div>
 
-            <button
-              type="button"
-              onClick={() => navigate({ to: "/register" })}
-              className="flex w-full items-center justify-center gap-3 rounded-xl bg-brand-blue py-3 text-sm font-semibold text-white transition hover:bg-brand-blue/90"
-            >
-              Comenzar — Crear mi Gemelo Digital
-            </button>
+<button
+  type="button"
+  onClick={async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      const confirmed = window.confirm(
+        `Ya tienes sesión activa como ${session.user.email}.\n\n¿Quieres continuar con esta cuenta?`
+      );
+      if (confirmed) {
+        void navigate({ to: "/onboarding" });
+      }
+    } else {
+      void navigate({ to: "/register" });
+    }
+  }}
+  className="flex w-full items-center justify-center gap-3 rounded-xl bg-brand-blue py-3 text-sm font-semibold text-white transition hover:bg-brand-blue/90"
+>
+  Comenzar — Crear mi Gemelo Digital
+</button>
 
             <button
               type="button"

@@ -4,6 +4,49 @@ const model = "gemini-2.5-flash-lite";
 export const NEXUS_SYSTEM_PROMPT =
   "Eres Nexus IA, asistente especializado en clima laboral, bienestar organizacional y liderazgo. Analizas datos de equipos y das recomendaciones a líderes sobre motivación, burnout, estrés y comunicación. Eres profesional, empático y directo.";
 
+export function buildContextualPrompt(profile?: {
+  emotional_intelligence_score?: number;
+  collaboration_index?: number;
+  stress_resilience?: number;
+  empathy_score?: number;
+  leadership_style?: string;
+  conflict_mode?: string;
+} | null, teamStats?: {
+  climaPromedio?: number;
+  totalComentarios?: number;
+  totalPerfiles?: number;
+} | null): string {
+  let prompt = NEXUS_SYSTEM_PROMPT;
+
+  if (profile) {
+    prompt += `
+
+PERFIL DEL USUARIO ACTUAL:
+- Inteligencia Emocional: ${profile.emotional_intelligence_score ?? "N/A"}/100
+- Índice de Colaboración: ${profile.collaboration_index ?? "N/A"}/100
+- Resiliencia al Estrés: ${profile.stress_resilience ?? "N/A"}/100
+- Empatía: ${profile.empathy_score ?? "N/A"}/100
+- Estilo de Liderazgo: ${profile.leadership_style ?? "N/A"}
+- Modo de Manejo de Conflictos: ${profile.conflict_mode ?? "N/A"}
+
+Usa estos datos para personalizar TODAS tus respuestas. 
+Cuando el usuario pregunte sobre su liderazgo, estrés o equipo, 
+refiere específicamente a sus scores.`;
+  }
+
+  if (teamStats) {
+    prompt += `
+
+DATOS DEL EQUIPO HOY:
+- Clima promedio: ${teamStats.climaPromedio ?? "N/A"}/5
+- Comentarios anónimos activos: ${teamStats.totalComentarios ?? 0}
+- Miembros con gemelo digital: ${teamStats.totalPerfiles ?? 0}
+
+Analiza estos datos cuando el usuario pregunte por el estado del equipo.`;
+  }
+
+  return prompt;
+}
 export type GeminiHistoryMessage = {
   role: "user" | "assistant";
   content: string;
@@ -61,6 +104,7 @@ function toGeminiContents(
 export async function generateNexusReply(
   history: GeminiHistoryMessage[],
   userMessage: string,
+  customSystemPrompt?: string,
 ): Promise<string> {
   if (typeof window === "undefined") {
     throw new Error("El chat solo está disponible en el navegador.");
@@ -75,7 +119,7 @@ export async function generateNexusReply(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      contents: toGeminiContents(history, userMessage, NEXUS_SYSTEM_PROMPT),
+    contents: toGeminiContents(history, userMessage, customSystemPrompt ?? NEXUS_SYSTEM_PROMPT),
     }),
   });
 

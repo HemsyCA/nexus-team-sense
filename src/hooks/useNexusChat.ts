@@ -1,6 +1,7 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { generateNexusReply, type GeminiHistoryMessage } from "@/lib/gemini";
+import { generateNexusReply, buildContextualPrompt, type GeminiHistoryMessage } from "@/lib/gemini";
+import { supabase } from "@/lib/supabase";
 
 export type ChatMessage = {
   id: string;
@@ -33,10 +34,77 @@ export function useNexusChat() {
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [systemPrompt, setSystemPrompt] = useState<string>("");
   const isTypingRef = useRef(false);
   const messagesRef = useRef(messages);
 
   messagesRef.current = messages;
+
+  // Carga el perfil del usuario y datos del equipo al montar
+  useEffect(() => {
+    async function loadContext() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+
+        // Perfil del gemelo digital
+        const { data: profile } = await supabase
+          .from("digital_twin_profiles")
+          .select("*")
+          .eq("user_id", session.user.id)
+          .maybeSingle();
+
+        // Datos del equipo: clima promedio de hoy
+        const today = new Date().toISOString().split("T")[0];
+        const { data: pulseData } = await supabase
+          .from("daily_pulse")
+          .select("mood")
+          .eq("pulse_date", today);
+
+        const { count: totalComentarios } = await supabase
+          .from("daily_feeds")
+          .select("*", { count: "exact", head: true });
+
+        const { count: totalPerfiles } = await supabase
+          .from("digital_twin_profiles")
+          .select("*", { count: "exact", head: true });
+
+        // Calcula clima promedio
+        let climaPromedio: number | undefined;
+        if (pulseData && pulseData.length > 0) {
+          const moodValues = { good: 5, neutral: 3, bad: 1 };
+          const sum = pulseData.reduce((acc, p) => 
+            acc + (moodValues[p.mood as keyof typeof moodValues] ?? 3), 0
+          );
+          climaPromedio = Math.round((sum / pulseData.length) * 10) / 10;
+        }
+
+        const prompt = buildContextualPrompt(
+          profile,
+          {
+            climaPromedio,
+            totalComentarios: totalComentarios ?? 0,
+            totalPerfiles: totalPerfiles ?? 0,
+          }
+        );
+
+        setSystemPrompt(prompt);
+
+        // Actualiza el mensaje de bienvenida con el nombre si existe
+        if (profile?.leadership_style) {
+          setMessages([{
+            id: "welcome",
+            role: "assistant",
+            content: `Hola. Soy Nexus IA. He cargado tu perfil de liderazgo — veo que tu estilo predominante es **${profile.leadership_style}** con un índice de colaboración de ${profile.collaboration_index}/100. ¿En qué aspecto de tu equipo quieres profundizar hoy?`,
+          }]);
+        }
+      } catch (err) {
+        console.error("Error cargando contexto:", err);
+      }
+    }
+
+    void loadContext();
+  }, []);
 
   const sendMessage = useCallback(async (text: string) => {
     const trimmed = text.trim();
@@ -57,7 +125,12 @@ export function useNexusChat() {
     setIsTyping(true);
 
     try {
-      const response = await generateNexusReply(history, trimmed);
+      // Usa el prompt contextual si está disponible
+      const response = await generateNexusReply(
+        history, 
+        trimmed,
+        systemPrompt || undefined
+      );
 
       setMessages((prev) => [
         ...prev,
@@ -74,7 +147,7 @@ export function useNexusChat() {
       isTypingRef.current = false;
       setIsTyping(false);
     }
-  }, []);
+  }, [systemPrompt]);
 
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
