@@ -1,11 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AlertTriangle, TrendingUp, TrendingDown, Download } from "lucide-react";
 import { AppLayout, Card } from "@/components/AppLayout";
-import { NexusChat } from "@/components/NexusChat";
-import { requireAuth } from "@/lib/auth-guard";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { requireAuthAndOnboarded } from "@/lib/auth-guard";
 
 export const Route = createFileRoute("/dashboard")({
-  beforeLoad: requireAuth,
+  beforeLoad: requireAuthAndOnboarded,
   head: () => ({
     meta: [
       { title: "Dashboard · NEXUS LEAD IA" },
@@ -15,7 +15,11 @@ export const Route = createFileRoute("/dashboard")({
       },
     ],
   }),
-  component: DashboardPage,
+  component: () => (
+    <ProtectedRoute>
+      <DashboardPage />
+    </ProtectedRoute>
+  ),
 });
 
 // Sparkline-like SVG generator

@@ -10,10 +10,11 @@ import {
   Sparkles,
 } from "lucide-react";
 import { AppLayout, Card } from "@/components/AppLayout";
-import { requireAuth } from "@/lib/auth-guard";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { requireAuthAndOnboarded } from "@/lib/auth-guard";
 
 export const Route = createFileRoute("/home")({
-  beforeLoad: requireAuth,
+  beforeLoad: requireAuthAndOnboarded,
   head: () => ({
     meta: [
       { title: "Inicio · NEXUS LEAD IA" },
@@ -23,7 +24,11 @@ export const Route = createFileRoute("/home")({
       },
     ],
   }),
-  component: HomePage,
+  component: () => (
+    <ProtectedRoute>
+      <HomePage />
+    </ProtectedRoute>
+  ),
 });
 
 const metrics = [

@@ -2,10 +2,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { ShieldCheck, EyeOff, Lock, Bell, FileCheck2 } from "lucide-react";
 import { AppLayout, Card } from "@/components/AppLayout";
-import { requireAuth } from "@/lib/auth-guard";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { requireAuthAndOnboarded } from "@/lib/auth-guard";
 
 export const Route = createFileRoute("/configuracion")({
-  beforeLoad: requireAuth,
+  beforeLoad: requireAuthAndOnboarded,
   head: () => ({
     meta: [
       { title: "Privacidad · NEXUS LEAD IA" },
@@ -15,7 +16,11 @@ export const Route = createFileRoute("/configuracion")({
       },
     ],
   }),
-  component: PrivacyPage,
+  component: () => (
+    <ProtectedRoute>
+      <PrivacyPage />
+    </ProtectedRoute>
+  ),
 });
 
 function PrivacyPage() {

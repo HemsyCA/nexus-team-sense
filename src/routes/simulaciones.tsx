@@ -1,10 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Sparkles, ArrowRight, Play } from "lucide-react";
 import { AppLayout, Card } from "@/components/AppLayout";
-import { requireAuth } from "@/lib/auth-guard";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { requireAuthAndOnboarded } from "@/lib/auth-guard";
 
 export const Route = createFileRoute("/simulaciones")({
-  beforeLoad: requireAuth,
+  beforeLoad: requireAuthAndOnboarded,
   head: () => ({
     meta: [
       { title: "Simulaciones · NEXUS LEAD IA" },
@@ -14,7 +15,11 @@ export const Route = createFileRoute("/simulaciones")({
       },
     ],
   }),
-  component: SimPage,
+  component: () => (
+    <ProtectedRoute>
+      <SimPage />
+    </ProtectedRoute>
+  ),
 });
 
 const metrics = [

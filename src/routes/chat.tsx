@@ -2,10 +2,11 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import { AppLayout, Card } from "@/components/AppLayout";
 import { NexusChat } from "@/components/NexusChat";
-import { requireAuth } from "@/lib/auth-guard";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { requireAuthAndOnboarded } from "@/lib/auth-guard";
 
 export const Route = createFileRoute("/chat")({
-  beforeLoad: requireAuth,
+  beforeLoad: requireAuthAndOnboarded,
   head: () => ({
     meta: [
       { title: "Chat IA · NEXUS LEAD IA" },
@@ -15,7 +16,11 @@ export const Route = createFileRoute("/chat")({
       },
     ],
   }),
-  component: ChatPage,
+  component: () => (
+    <ProtectedRoute>
+      <ChatPage />
+    </ProtectedRoute>
+  ),
 });
 
 function ChatPage() {

@@ -188,9 +188,13 @@ function LoginPage() {
               <span className="h-px flex-1 bg-border" />
             </div>
 
-            <Button asChild className="w-full">
-              <Link to="/register">Comenzar — Crear mi Gemelo Digital</Link>
-            </Button>
+            <button
+              type="button"
+              onClick={() => navigate({ to: "/register" })}
+              className="flex w-full items-center justify-center gap-3 rounded-xl bg-brand-blue py-3 text-sm font-semibold text-white transition hover:bg-brand-blue/90"
+            >
+              Comenzar — Crear mi Gemelo Digital
+            </button>
 
             <button
               type="button"

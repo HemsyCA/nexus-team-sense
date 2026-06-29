@@ -16,6 +16,30 @@ export async function requireAuth() {
   return { session, user: session.user };
 }
 
+export async function requireAuthAndOnboarded() {
+  if (import.meta.env.SSR) return;
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session) {
+    throw redirect({ to: "/" });
+  }
+
+  const { data: profile } = await supabase
+    .from("digital_twin_profiles")
+    .select("user_id")
+    .eq("user_id", session.user.id)
+    .maybeSingle();
+
+  if (!profile) {
+    throw redirect({ to: "/onboarding" });
+  }
+
+  return { session, user: session.user, profile };
+}
+
 export async function redirectIfAuthenticated() {
   if (import.meta.env.SSR) return;
 
@@ -24,7 +48,14 @@ export async function redirectIfAuthenticated() {
   } = await supabase.auth.getSession();
 
   if (session) {
-    throw redirect({ to: "/home" });
+    const { data: profile } = await supabase
+      .from("digital_twin_profiles")
+      .select("user_id")
+      .eq("user_id", session.user.id)
+      .maybeSingle();
+
+    const destination = profile ? "/dashboard" : "/onboarding";
+    throw redirect({ to: destination });
   }
 }
 
@@ -39,13 +70,13 @@ export async function redirectIfOnboarded() {
     throw redirect({ to: "/" });
   }
 
-  const { data: profile, error } = await supabase
+  const { data: profile } = await supabase
     .from("digital_twin_profiles")
     .select("user_id")
     .eq("user_id", session.user.id)
-    .single();
+    .maybeSingle();
 
-  if (!error && profile) {
+  if (profile) {
     throw redirect({ to: "/dashboard" });
   }
 

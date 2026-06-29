@@ -1,9 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { DigitalTwinReady } from "@/components/onboarding/DigitalTwinReady";
-import { requireAuth } from "@/lib/auth-guard";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { requireAuthAndOnboarded } from "@/lib/auth-guard";
 
 export const Route = createFileRoute("/onboarding/complete")({
-  beforeLoad: requireAuth,
+  beforeLoad: requireAuthAndOnboarded,
   head: () => ({
     meta: [
       { title: "Gemelo Digital listo · NEXUS LEAD IA" },
@@ -13,5 +14,9 @@ export const Route = createFileRoute("/onboarding/complete")({
       },
     ],
   }),
-  component: DigitalTwinReady,
+  component: () => (
+    <ProtectedRoute>
+      <DigitalTwinReady />
+    </ProtectedRoute>
+  ),
 });
