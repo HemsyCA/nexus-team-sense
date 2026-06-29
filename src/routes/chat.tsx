@@ -30,7 +30,7 @@ function ChatPage() {
         </div>
 
         <aside className="hidden space-y-5 lg:col-span-4 lg:block">
-          <Card className="bg-brand-navy text-white">
+          <Card className="bg-brand-navy text-black">
             <div className="text-xs font-semibold uppercase tracking-wider text-brand-blue">
               Modelo Nexus IA · Gemini
             </div>

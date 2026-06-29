@@ -1,5 +1,5 @@
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-const model = "gemini-1.5-flash-latest";
+const model = "gemini-flash-lite";
 
 export const NEXUS_SYSTEM_PROMPT =
   "Eres Nexus IA, asistente especializado en clima laboral, bienestar organizacional y liderazgo. Analizas datos de equipos y das recomendaciones a líderes sobre motivación, burnout, estrés y comunicación. Eres profesional, empático y directo.";
@@ -38,17 +38,23 @@ function getApiKey(): string {
 function toGeminiContents(
   history: GeminiHistoryMessage[],
   userMessage: string,
+  systemPrompt?: string,
 ): GeminiContent[] {
-  const contents: GeminiContent[] = history.map((message) => ({
-    role: message.role === "user" ? "user" : "model",
-    parts: [{ text: message.content }],
-  }));
-
-  contents.push({
-    role: "user",
-    parts: [{ text: userMessage }],
+  const contents: GeminiContent[] = [];
+  
+  if (systemPrompt) {
+    contents.push({ role: "user", parts: [{ text: systemPrompt }] });
+    contents.push({ role: "model", parts: [{ text: "Entendido." }] });
+  }
+  
+  history.forEach((message) => {
+    contents.push({
+      role: message.role === "user" ? "user" : "model",
+      parts: [{ text: message.content }],
+    });
   });
 
+  contents.push({ role: "user", parts: [{ text: userMessage }] });
   return contents;
 }
 
@@ -67,13 +73,9 @@ export async function generateNexusReply(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-goog-api-key": key,
     },
     body: JSON.stringify({
-      systemInstruction: {
-        parts: [{ text: NEXUS_SYSTEM_PROMPT }],
-      },
-      contents: toGeminiContents(history, userMessage),
+      contents: toGeminiContents(history, userMessage, NEXUS_SYSTEM_PROMPT),
     }),
   });
 
