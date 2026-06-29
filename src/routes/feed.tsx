@@ -48,7 +48,7 @@ type Post =
       responses: number;
     };
 
-const posts: Post[] = [
+const initialPosts: Post[] = [
   {
     type: "text",
     id: "1",
@@ -99,6 +99,32 @@ const filters = ["Todos", "Operaciones", "Marketing", "Ingeniería", "RR. HH."];
 
 function FeedPage() {
   const [active, setActive] = useState("Todos");
+  const [posts, setPosts] = useState<Post[]>(initialPosts);
+  const [draft, setDraft] = useState("");
+  const [isPosting, setIsPosting] = useState(false);
+
+  const handlePublish = () => {
+    const trimmed = draft.trim();
+    if (!trimmed) return;
+
+    setIsPosting(true);
+    window.setTimeout(() => {
+      setPosts((current) => [
+        {
+          type: "text",
+          id: `${Date.now()}`,
+          code: `COL-${Math.floor(100 + Math.random() * 900)}`,
+          area: "General",
+          time: "Hace unos segundos",
+          text: trimmed,
+          reactions: { id: 0, identify: 0, support: 0 },
+        },
+        ...current,
+      ]);
+      setDraft("");
+      setIsPosting(false);
+    }, 500);
+  };
 
   return (
     <AppLayout
@@ -115,6 +141,8 @@ function FeedPage() {
               </div>
               <div className="flex-1">
                 <textarea
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
                   className="w-full resize-none rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground transition focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/15"
                   rows={3}
                   placeholder="Comparte cómo te sentiste hoy en el trabajo… (publicación 100% anónima)"
@@ -123,9 +151,14 @@ function FeedPage() {
                   <p className="truncate text-[11px] text-muted-foreground">
                     Tu identidad queda cifrada. Solo se mostrará un código anónimo.
                   </p>
-                  <button className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-brand-navy px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-navy/90">
+                  <button
+                    type="button"
+                    onClick={handlePublish}
+                    disabled={isPosting || !draft.trim()}
+                    className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-brand-navy px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-navy/90 disabled:cursor-not-allowed disabled:bg-muted/80"
+                  >
                     <Send className="size-3.5" />
-                    Publicar
+                    {isPosting ? "Publicando…" : "Publicar"}
                   </button>
                 </div>
               </div>
