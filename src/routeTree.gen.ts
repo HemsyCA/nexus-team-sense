@@ -10,16 +10,29 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SimulacionesRouteImport } from './routes/simulaciones'
+import { Route as RegisterRouteImport } from './routes/register'
+import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as HomeRouteImport } from './routes/home'
 import { Route as FeedRouteImport } from './routes/feed'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as ConfiguracionRouteImport } from './routes/configuracion'
 import { Route as ChatRouteImport } from './routes/chat'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as OnboardingCompleteRouteImport } from './routes/onboarding/complete'
 
 const SimulacionesRoute = SimulacionesRouteImport.update({
   id: '/simulaciones',
   path: '/simulaciones',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RegisterRoute = RegisterRouteImport.update({
+  id: '/register',
+  path: '/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OnboardingRoute = OnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HomeRoute = HomeRouteImport.update({
@@ -52,6 +65,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OnboardingCompleteRoute = OnboardingCompleteRouteImport.update({
+  id: '/complete',
+  path: '/complete',
+  getParentRoute: () => OnboardingRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -60,7 +78,10 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof DashboardRoute
   '/feed': typeof FeedRoute
   '/home': typeof HomeRoute
+  '/onboarding': typeof OnboardingRouteWithChildren
+  '/register': typeof RegisterRoute
   '/simulaciones': typeof SimulacionesRoute
+  '/onboarding/complete': typeof OnboardingCompleteRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -69,7 +90,10 @@ export interface FileRoutesByTo {
   '/dashboard': typeof DashboardRoute
   '/feed': typeof FeedRoute
   '/home': typeof HomeRoute
+  '/onboarding': typeof OnboardingRouteWithChildren
+  '/register': typeof RegisterRoute
   '/simulaciones': typeof SimulacionesRoute
+  '/onboarding/complete': typeof OnboardingCompleteRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -79,7 +103,10 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRoute
   '/feed': typeof FeedRoute
   '/home': typeof HomeRoute
+  '/onboarding': typeof OnboardingRouteWithChildren
+  '/register': typeof RegisterRoute
   '/simulaciones': typeof SimulacionesRoute
+  '/onboarding/complete': typeof OnboardingCompleteRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -90,7 +117,10 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/feed'
     | '/home'
+    | '/onboarding'
+    | '/register'
     | '/simulaciones'
+    | '/onboarding/complete'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -99,7 +129,10 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/feed'
     | '/home'
+    | '/onboarding'
+    | '/register'
     | '/simulaciones'
+    | '/onboarding/complete'
   id:
     | '__root__'
     | '/'
@@ -108,7 +141,10 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/feed'
     | '/home'
+    | '/onboarding'
+    | '/register'
     | '/simulaciones'
+    | '/onboarding/complete'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -118,6 +154,8 @@ export interface RootRouteChildren {
   DashboardRoute: typeof DashboardRoute
   FeedRoute: typeof FeedRoute
   HomeRoute: typeof HomeRoute
+  OnboardingRoute: typeof OnboardingRouteWithChildren
+  RegisterRoute: typeof RegisterRoute
   SimulacionesRoute: typeof SimulacionesRoute
 }
 
@@ -128,6 +166,20 @@ declare module '@tanstack/react-router' {
       path: '/simulaciones'
       fullPath: '/simulaciones'
       preLoaderRoute: typeof SimulacionesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/register': {
+      id: '/register'
+      path: '/register'
+      fullPath: '/register'
+      preLoaderRoute: typeof RegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/onboarding': {
+      id: '/onboarding'
+      path: '/onboarding'
+      fullPath: '/onboarding'
+      preLoaderRoute: typeof OnboardingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/home': {
@@ -172,8 +224,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/onboarding/complete': {
+      id: '/onboarding/complete'
+      path: '/complete'
+      fullPath: '/onboarding/complete'
+      preLoaderRoute: typeof OnboardingCompleteRouteImport
+      parentRoute: typeof OnboardingRoute
+    }
   }
 }
+
+interface OnboardingRouteChildren {
+  OnboardingCompleteRoute: typeof OnboardingCompleteRoute
+}
+
+const OnboardingRouteChildren: OnboardingRouteChildren = {
+  OnboardingCompleteRoute: OnboardingCompleteRoute,
+}
+
+const OnboardingRouteWithChildren = OnboardingRoute._addFileChildren(
+  OnboardingRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -182,6 +253,8 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardRoute: DashboardRoute,
   FeedRoute: FeedRoute,
   HomeRoute: HomeRoute,
+  OnboardingRoute: OnboardingRouteWithChildren,
+  RegisterRoute: RegisterRoute,
   SimulacionesRoute: SimulacionesRoute,
 }
 export const routeTree = rootRouteImport

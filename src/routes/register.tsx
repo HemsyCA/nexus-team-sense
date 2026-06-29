@@ -1,61 +1,61 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Lock, Mail, ShieldCheck } from "lucide-react";
+import { Mail, Lock, User } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { redirectIfAuthenticated } from "@/lib/auth-guard";
 import { supabase } from "@/lib/supabase";
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute("/register")({
   beforeLoad: redirectIfAuthenticated,
   head: () => ({
     meta: [
-      { title: "NEXUS LEAD IA — Acceso" },
+      { title: "Registro · NEXUS LEAD IA" },
       {
         name: "description",
-        content:
-          "Plataforma de inteligencia artificial para medir clima laboral, estrés y burnout de forma anónima.",
-      },
-      { property: "og:title", content: "NEXUS LEAD IA" },
-      {
-        property: "og:description",
-        content: "Escucha a tu equipo antes de que el problema sea visible.",
+        content: "Regístrate para crear tu Gemelo Digital y acceder a Nexus Lead IA.",
       },
     ],
   }),
-  component: LoginPage,
+  component: RegisterPage,
 });
 
-function LoginPage() {
+function RegisterPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
     setError(null);
     setLoading(true);
 
-    const { error: authError } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
     });
 
     setLoading(false);
 
-    if (authError) {
-      setError("Correo o contraseña incorrectos. Verifica tus credenciales.");
+    if (error) {
+      setError(error.message);
       return;
     }
 
-    await navigate({ to: "/home" });
+    if (data.session) {
+      await navigate({ to: "/onboarding" });
+      return;
+    }
+
+    // Si la confirmación por email es necesaria, también redirigimos a onboarding.
+    await navigate({ to: "/onboarding" });
   }
 
   return (
     <div className="relative grid min-h-screen bg-brand-navy text-white lg:grid-cols-2">
-      {/* Left brand panel */}
       <div className="relative hidden flex-col justify-between overflow-hidden p-12 lg:flex">
         <div
           className="pointer-events-none absolute -left-32 top-1/2 size-[600px] -translate-y-1/2 rounded-full opacity-30 blur-3xl"
@@ -86,19 +86,17 @@ function LoginPage() {
 
         <div className="relative max-w-md">
           <h2 className="text-4xl font-bold leading-tight tracking-tight">
-            Escucha a tu equipo antes de que el problema sea visible.
+            Crea tu Gemelo Digital
           </h2>
           <p className="mt-6 text-sm leading-relaxed text-white/60">
-            Mide clima laboral, estrés, motivación y riesgo de burnout en tiempo
-            real. Comentarios diarios anónimos analizados por IA, coaching
-            predictivo para líderes.
+            Responde los tests psicométricos y construye tu perfil de liderazgo para recibir coaching predictivo.
           </p>
 
           <div className="mt-10 grid grid-cols-3 gap-4">
             {[
-              { v: "100%", l: "Anónimo" },
-              { v: "24/7", l: "IA Activa" },
-              { v: "AES-256", l: "Cifrado" },
+              { v: "3 tests", l: "Rápido" },
+              { v: "100%", l: "Seguro" },
+              { v: "IA", l: "Personalizado" },
             ].map((s) => (
               <div
                 key={s.l}
@@ -114,12 +112,11 @@ function LoginPage() {
         </div>
 
         <p className="relative flex items-center gap-2 text-xs text-white/40">
-          <ShieldCheck className="size-3.5" />
-          Tus respuestas se procesan de forma anónima y segura.
+          <Lock className="size-3.5" />
+          Protegemos tus datos con cifrado y seudonimización.
         </p>
       </div>
 
-      {/* Right form */}
       <div className="flex items-center justify-center bg-brand-bg p-6 text-foreground sm:p-12">
         <div className="w-full max-w-sm">
           <div className="mb-10 flex items-center gap-2 lg:hidden">
@@ -129,12 +126,22 @@ function LoginPage() {
             <span className="font-bold tracking-tight">NEXUS LEAD IA</span>
           </div>
 
-          <h1 className="text-2xl font-bold tracking-tight">Bienvenido</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Crear cuenta</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Accede con tu cuenta corporativa para continuar.
+            Regístrate para iniciar el onboarding y crear tu Gemelo Digital.
           </p>
 
           <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
+            <Field icon={<User className="size-4" />} label="Nombre completo">
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Tu nombre"
+                required
+                className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+              />
+            </Field>
             <Field icon={<Mail className="size-4" />} label="Correo corporativo">
               <input
                 type="email"
@@ -153,7 +160,7 @@ function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 required
-                autoComplete="current-password"
+                autoComplete="new-password"
                 className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
               />
             </Field>
@@ -164,48 +171,17 @@ function LoginPage() {
               </p>
             )}
 
-            <div className="flex items-center justify-between text-xs">
-              <label className="flex items-center gap-2 text-muted-foreground">
-                <input type="checkbox" className="accent-brand-blue" />
-                Recordar sesión
-              </label>
-              <a className="font-medium text-brand-navy hover:text-brand-blue" href="#">
-                ¿Olvidaste tu contraseña?
-              </a>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="block w-full rounded-xl bg-brand-navy py-3.5 text-center text-sm font-semibold text-white shadow-lg shadow-brand-navy/20 transition hover:bg-brand-navy/90 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {loading ? "Ingresando…" : "Ingresar"}
-            </button>
-
-            <div className="flex items-center gap-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              <span className="h-px flex-1 bg-border" />
-              o
-              <span className="h-px flex-1 bg-border" />
-            </div>
-
-            <Button asChild className="w-full">
-              <Link to="/register">Comenzar — Crear mi Gemelo Digital</Link>
+            <Button type="submit" className="w-full">
+              {loading ? "Creando cuenta…" : "Comenzar — Crear mi Gemelo Digital"}
             </Button>
 
-            <button
-              type="button"
-              className="flex w-full items-center justify-center gap-3 rounded-xl border border-border bg-card py-3 text-sm font-medium text-foreground transition hover:bg-muted"
-            >
-              <GoogleIcon />
-              Continuar con Google
-            </button>
+            <p className="text-center text-sm text-muted-foreground">
+              ¿Ya tienes cuenta?{' '}
+              <Link to="/" className="text-brand-blue hover:underline">
+                Inicia sesión
+              </Link>
+            </p>
           </form>
-
-          <p className="mt-8 rounded-xl bg-muted/60 p-3 text-center text-[11px] leading-relaxed text-muted-foreground">
-            <ShieldCheck className="mr-1 inline size-3 text-brand-emerald" />
-            Tus respuestas se procesan de forma{" "}
-            <strong className="text-foreground">anónima y segura</strong>.
-          </p>
         </div>
       </div>
     </div>
@@ -231,16 +207,5 @@ function Field({
         {children}
       </div>
     </label>
-  );
-}
-
-function GoogleIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true">
-      <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.8 1.1 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z" />
-      <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 16 19 13 24 13c3 0 5.8 1.1 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z" />
-      <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35 26.7 36 24 36c-5.3 0-9.7-3.3-11.3-8l-6.5 5C9.6 39.6 16.3 44 24 44z" />
-      <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.2 4.2-4.1 5.6l6.2 5.2c-.4.4 6.6-4.8 6.6-14.8 0-1.3-.1-2.4-.4-3.5z" />
-    </svg>
   );
 }
