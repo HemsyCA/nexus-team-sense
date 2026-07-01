@@ -1,9 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AlertTriangle, TrendingUp, TrendingDown, Download } from "lucide-react";
+import { useEffect, useState } from "react";
 import { AppLayout, Card } from "@/components/AppLayout";
 import { NexusChat } from "@/components/NexusChat";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { requireAuthAndOnboarded } from "@/lib/auth-guard";
+import { supabase } from "@/lib/supabase";
 
 export const Route = createFileRoute("/dashboard")({
   beforeLoad: requireAuthAndOnboarded,
@@ -23,35 +25,184 @@ export const Route = createFileRoute("/dashboard")({
   ),
 });
 
-// Sparkline-like SVG generator
-function LineChart({ color = "var(--brand-blue)" }: { color?: string }) {
-  const points = [10, 28, 22, 40, 32, 52, 48, 60, 55, 72, 68, 80];
-  const max = 100;
-  const w = 100;
-  const h = 40;
-  const d = points
-    .map((v, i) => {
-      const x = (i / (points.length - 1)) * w;
-      const y = h - (v / max) * h;
-      return `${i === 0 ? "M" : "L"}${x},${y}`;
-    })
-    .join(" ");
-  const area = `${d} L${w},${h} L0,${h} Z`;
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="h-20 w-full" preserveAspectRatio="none">
-      <defs>
-        <linearGradient id={`g-${color}`} x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.3" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={area} fill={`url(#g-${color})`} />
-      <path d={d} stroke={color} strokeWidth="1.5" fill="none" />
-    </svg>
-  );
-}
+type OrgIndicators = {
+  burnout_avg: number | null;
+  stress_avg: number | null;
+  motivation_avg: number | null;
+  energy_avg: number | null;
+  pulse_stress_avg: number | null;
+  pulse_motivation_avg: number | null;
+  users_pulsed_today: number | null;
+  comments_24h: number | null;
+  rotation_risk_score: number | null;
+};
+
+type DepartmentIndicator = {
+  department_name: string | null;
+  department_code: string | null;
+  headcount: number | null;
+  members_with_profile: number | null;
+  burnout_avg: number | null;
+  motivation_avg: number | null;
+  rotation_risk_score: number | null;
+  positive_count: number | null;
+  negative_count: number | null;
+  neutral_count: number | null;
+  average_emotional_intelligence: number | null;
+  average_collaboration: number | null;
+  average_stress_resilience: number | null;
+  average_empathy: number | null;
+  feed_comments_count: number | null;
+};
+
+type TrendPoint = {
+  pulse_date: string;
+  stress_avg: number | null;
+  motivation_avg: number | null;
+  energy_avg: number | null;
+  respondents: number | null;
+};
+
+type AlertItem = {
+  type: string;
+  message: string;
+  department: string;
+  severity: string;
+};
 
 function DashboardPage() {
+  const [orgIndicators, setOrgIndicators] = useState<OrgIndicators | null>(null);
+  const [departments, setDepartments] = useState<DepartmentIndicator[]>([]);
+  const [trend, setTrend] = useState<TrendPoint[]>([]);
+  const [alerts, setAlerts] = useState<AlertItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  async function loadData() {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const [
+        { data: departmentsData },
+        { data: profilesData },
+        { data: feedData },
+        { data: pulseData },
+        { data: twinData },
+        { data: trendData },
+        { data: alertData },
+      ] = await Promise.all([
+        supabase.from("departments").select("id, name, code, headcount").order("name"),
+        supabase.from("profiles").select("user_id, department_id"),
+        supabase.from("daily_feeds").select("user_id, sentiment, burnout_score, stress_score, motivation_score, created_at"),
+        supabase.from("daily_pulse").select("user_id, stress_level, motivation_level, energy_level, pulse_date"),
+        supabase.from("digital_twin_profiles").select("user_id, emotional_intelligence_score, collaboration_index, stress_resilience, empathy_score"),
+        supabase.from("pulse_trend_14d").select("*").order("pulse_date", { ascending: true }),
+        supabase.rpc("get_active_alerts"),
+      ]);
+
+      const departmentRows = ((departmentsData as Array<{ id: string; name: string; code: string | null; headcount: number | null }> | null) ?? []).map((department) => {
+        const members = ((profilesData as Array<{ user_id: string; department_id: string | null }> | null) ?? []).filter(
+          (profile) => profile.department_id === department.id,
+        );
+        const memberIds = members.map((member) => member.user_id);
+        const testRows = ((twinData as Array<{ user_id: string; emotional_intelligence_score: number | null; collaboration_index: number | null; stress_resilience: number | null; empathy_score: number | null }> | null) ?? []).filter(
+          (row) => memberIds.includes(row.user_id),
+        );
+        const feedRows = ((feedData as Array<{ user_id: string | null; sentiment: string | null; burnout_score: number | null; stress_score: number | null; motivation_score: number | null; created_at: string | null }> | null) ?? []).filter(
+          (row) => row.user_id && memberIds.includes(row.user_id),
+        );
+
+        const average = (values: Array<number | null | undefined>) => {
+          const validValues = values.filter((value): value is number => typeof value === "number");
+          return validValues.length > 0 ? validValues.reduce((sum, value) => sum + value, 0) / validValues.length : null;
+        };
+
+        return {
+          department_name: department.name,
+          department_code: department.code,
+          headcount: department.headcount ?? memberIds.length,
+          members_with_profile: memberIds.length,
+          burnout_avg: average(feedRows.map((row) => row.burnout_score)),
+          motivation_avg: average(feedRows.map((row) => row.motivation_score)),
+          rotation_risk_score: average([
+            average(feedRows.map((row) => row.burnout_score)),
+            average(testRows.map((row) => row.stress_resilience)),
+            average(feedRows.map((row) => row.motivation_score)),
+          ]),
+          positive_count: feedRows.filter((row) => row.sentiment === "positive").length,
+          negative_count: feedRows.filter((row) => row.sentiment === "negative").length,
+          neutral_count: feedRows.filter((row) => row.sentiment === "neutral").length,
+          average_emotional_intelligence: average(testRows.map((row) => row.emotional_intelligence_score)),
+          average_collaboration: average(testRows.map((row) => row.collaboration_index)),
+          average_stress_resilience: average(testRows.map((row) => row.stress_resilience)),
+          average_empathy: average(testRows.map((row) => row.empathy_score)),
+          feed_comments_count: feedRows.length,
+        } satisfies DepartmentIndicator;
+      });
+
+      const allFeedRows = ((feedData as Array<{ burnout_score: number | null; stress_score: number | null; motivation_score: number | null; created_at: string | null }> | null) ?? []);
+      const allTwinRows = ((twinData as Array<{ emotional_intelligence_score: number | null; collaboration_index: number | null; stress_resilience: number | null; empathy_score: number | null }> | null) ?? []);
+      const allPulseRows = ((pulseData as Array<{ stress_level: number | null; motivation_level: number | null; energy_level: number | null; pulse_date: string | null }> | null) ?? []);
+      const now = new Date();
+      const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+      const average = (values: Array<number | null | undefined>) => {
+        const validValues = values.filter((value): value is number => typeof value === "number");
+        return validValues.length > 0 ? validValues.reduce((sum, value) => sum + value, 0) / validValues.length : null;
+      };
+
+      const computedOrgIndicators: OrgIndicators = {
+        burnout_avg: average(allFeedRows.map((row) => row.burnout_score)),
+        stress_avg: average(allFeedRows.map((row) => row.stress_score)),
+        motivation_avg: average(allFeedRows.map((row) => row.motivation_score)),
+        energy_avg: average(allTwinRows.map((row) => row.stress_resilience)),
+        pulse_stress_avg: average(allPulseRows.map((row) => row.stress_level)),
+        pulse_motivation_avg: average(allPulseRows.map((row) => row.motivation_level)),
+        users_pulsed_today: allPulseRows.filter((row) => row.pulse_date === new Date().toISOString().slice(0, 10)).length,
+        comments_24h: allFeedRows.filter((row) => row.created_at && new Date(row.created_at) > twentyFourHoursAgo).length,
+        rotation_risk_score: average([
+          average(allFeedRows.map((row) => row.burnout_score)),
+          average(allPulseRows.map((row) => row.stress_level)),
+          average(allTwinRows.map((row) => row.stress_resilience)),
+        ]),
+      };
+
+      setOrgIndicators(computedOrgIndicators);
+      setDepartments(departmentRows.sort((a, b) => (b.rotation_risk_score ?? 0) - (a.rotation_risk_score ?? 0)));
+      setTrend((trendData as TrendPoint[] | null) ?? []);
+      setAlerts(((alertData?.data as AlertItem[] | null) ?? []).filter(Boolean));
+    } catch (err) {
+      console.error("Error cargando dashboard", err);
+      setError("No se pudieron cargar los indicadores desde Supabase.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadData();
+
+    const channel = supabase
+      .channel("dashboard-live")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "daily_pulse" }, () => {
+        void loadData();
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "daily_feeds" }, () => {
+        void loadData();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const climatePct = Math.max(0, Math.min(100, Math.round(((orgIndicators?.pulse_motivation_avg ?? 7) / 10) * 100)));
+  const stressPct = Math.max(0, Math.min(100, Math.round(((orgIndicators?.pulse_stress_avg ?? 3) / 10) * 100)));
+  const motivationPct = Math.max(0, Math.min(100, Math.round(((orgIndicators?.pulse_motivation_avg ?? 7) / 10) * 100)));
+  const burnoutPct = Math.max(0, Math.min(100, Math.round(((orgIndicators?.burnout_avg ?? 1.2) / 10) * 100)));
+
   return (
     <AppLayout
       title="Dashboard Anónimo"
@@ -79,31 +230,25 @@ function DashboardPage() {
         </button>
       </div>
 
-      {/* KPI charts */}
+      {error ? (
+        <div className="mb-6 rounded-xl border border-brand-red/30 bg-brand-red/5 p-4 text-sm text-brand-red">
+          {error}
+        </div>
+      ) : null}
+
       <section className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
         {[
-          { label: "Clima Laboral", value: "84%", delta: "+4%", up: true, color: "var(--brand-emerald)" },
-          { label: "Nivel de Estrés", value: "32%", delta: "−6%", up: true, color: "var(--brand-blue)" },
-          { label: "Motivación", value: "72%", delta: "+2%", up: true, color: "var(--brand-purple)" },
-          { label: "Riesgo Burnout", value: "12%", delta: "+3%", up: false, color: "var(--brand-red)" },
+          { label: "Clima Laboral", value: `${climatePct}%`, delta: `+${orgIndicators?.users_pulsed_today ?? 0} hoy`, up: true, color: "var(--brand-emerald)" },
+          { label: "Nivel de Estrés", value: `${stressPct}%`, delta: `${orgIndicators?.pulse_stress_avg?.toFixed(1) ?? "0.0"}/10`, up: true, color: "var(--brand-blue)" },
+          { label: "Motivación", value: `${motivationPct}%`, delta: `${orgIndicators?.pulse_motivation_avg?.toFixed(1) ?? "0.0"}/10`, up: true, color: "var(--brand-purple)" },
+          { label: "Riesgo Burnout", value: `${burnoutPct}%`, delta: `${orgIndicators?.burnout_avg?.toFixed(1) ?? "0.0"}/10`, up: false, color: "var(--brand-red)" },
         ].map((k) => (
           <Card key={k.label}>
-            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              {k.label}
-            </p>
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{k.label}</p>
             <div className="mt-2 flex items-baseline justify-between">
               <h3 className="text-3xl font-bold tracking-tight">{k.value}</h3>
-              <span
-                className={
-                  "flex items-center gap-1 text-xs font-semibold " +
-                  (k.up ? "text-brand-emerald" : "text-brand-red")
-                }
-              >
-                {k.up ? (
-                  <TrendingUp className="size-3" />
-                ) : (
-                  <TrendingDown className="size-3" />
-                )}
+              <span className={"flex items-center gap-1 text-xs font-semibold " + (k.up ? "text-brand-emerald" : "text-brand-red")}>
+                {k.up ? <TrendingUp className="size-3" /> : <TrendingDown className="size-3" />}
                 {k.delta}
               </span>
             </div>
@@ -114,15 +259,12 @@ function DashboardPage() {
         ))}
       </section>
 
-      {/* Main charts */}
       <section className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-12">
         <Card className="lg:col-span-8">
           <div className="mb-5 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-4">
             <div className="min-w-0">
               <h2 className="text-lg font-bold">Evolución semanal del ambiente</h2>
-              <p className="text-xs text-muted-foreground">
-                Comparación clima, motivación y estrés · últimas 12 semanas
-              </p>
+              <p className="text-xs text-muted-foreground">Datos provenientes de la vista de tendencia en Supabase</p>
             </div>
             <div className="flex shrink-0 gap-3 text-[11px]">
               <Legend color="bg-brand-emerald" label="Clima" />
@@ -131,28 +273,22 @@ function DashboardPage() {
             </div>
           </div>
           <div className="relative h-64 w-full">
-            <BarsChart />
+            <BarsChart trend={trend} />
           </div>
         </Card>
 
         <Card className="lg:col-span-4">
-          <h2 className="text-lg font-bold">Emociones predominantes</h2>
-          <p className="mb-5 text-xs text-muted-foreground">Análisis NLP semanal</p>
+          <h2 className="text-lg font-bold">Participación por área</h2>
+          <p className="mb-5 text-xs text-muted-foreground">Indicadores agregados desde Supabase</p>
           <ul className="space-y-4">
-            {[
-              { label: "Cansancio", pct: 38, color: "bg-brand-red" },
-              { label: "Motivación", pct: 27, color: "bg-brand-emerald" },
-              { label: "Ansiedad", pct: 18, color: "bg-brand-amber" },
-              { label: "Calma", pct: 11, color: "bg-brand-blue" },
-              { label: "Orgullo", pct: 6, color: "bg-brand-purple" },
-            ].map((e) => (
-              <li key={e.label}>
+            {departments.slice(0, 5).map((dept) => (
+              <li key={dept.department_name ?? "sin-area"}>
                 <div className="mb-1.5 flex items-center justify-between text-xs">
-                  <span className="font-medium">{e.label}</span>
-                  <span className="text-muted-foreground">{e.pct}%</span>
+                  <span className="font-medium">{dept.department_name ?? "Sin área"}</span>
+                  <span className="text-muted-foreground">{dept.members_with_profile ?? 0}</span>
                 </div>
                 <div className="h-2 overflow-hidden rounded-full bg-muted">
-                  <div className={`h-full ${e.color}`} style={{ width: `${e.pct}%` }} />
+                  <div className="h-full rounded-full bg-gradient-to-r from-brand-blue to-brand-purple" style={{ width: `${Math.min(100, ((dept.members_with_profile ?? 0) / Math.max(1, dept.headcount ?? 1)) * 100)}%` }} />
                 </div>
               </li>
             ))}
@@ -160,89 +296,119 @@ function DashboardPage() {
         </Card>
       </section>
 
-      {/* Participation + alerts */}
       <section className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-12">
         <Card className="lg:col-span-5">
           <h2 className="text-lg font-bold">Participación en el Feed</h2>
-          <p className="mb-6 text-xs text-muted-foreground">
-            Respuestas anónimas por área esta semana
-          </p>
+          <p className="mb-6 text-xs text-muted-foreground">Respuestas anónimas por área esta semana</p>
           <ul className="space-y-3">
-            {[
-              { area: "Operaciones", count: 48, pct: 92 },
-              { area: "Ingeniería", count: 41, pct: 78 },
-              { area: "Marketing", count: 28, pct: 65 },
-              { area: "Recursos Humanos", count: 22, pct: 88 },
-              { area: "Ventas", count: 17, pct: 42 },
-            ].map((a) => (
-              <li key={a.area} className="grid grid-cols-[8rem_minmax(0,1fr)_3rem] items-center gap-3 text-sm">
-                <span className="truncate font-medium">{a.area}</span>
+            {departments.slice(0, 5).map((dept) => (
+              <li key={`${dept.department_name}-feed`} className="grid grid-cols-[8rem_minmax(0,1fr)_3rem] items-center gap-3 text-sm">
+                <span className="truncate font-medium">{dept.department_name ?? "Sin área"}</span>
                 <div className="h-2 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-brand-blue to-brand-purple"
-                    style={{ width: `${a.pct}%` }}
-                  />
+                  <div className="h-full rounded-full bg-gradient-to-r from-brand-blue to-brand-purple" style={{ width: `${Math.min(100, ((dept.positive_count ?? 0) + (dept.neutral_count ?? 0)) * 2)}%` }} />
                 </div>
-                <span className="text-right text-xs text-muted-foreground">
-                  {a.count}
-                </span>
+                <span className="text-right text-xs text-muted-foreground">{dept.feed_comments_count ?? 0}</span>
               </li>
             ))}
           </ul>
         </Card>
 
         <Card className="lg:col-span-7">
+          <h2 className="mb-5 text-lg font-bold">Resultados de tests por área</h2>
+          <div className="space-y-3">
+            {departments.slice(0, 5).map((dept) => (
+              <div key={`${dept.department_name}-tests`} className="rounded-xl border border-border bg-background/60 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold">{dept.department_name ?? "Sin área"}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {dept.feed_comments_count ?? 0} comentarios · {dept.members_with_profile ?? 0} perfiles
+                    </p>
+                  </div>
+                  <div className="text-right text-[11px] text-muted-foreground">
+                    <p>IE: {dept.average_emotional_intelligence?.toFixed(0) ?? "—"}/100</p>
+                    <p>Colab.: {dept.average_collaboration?.toFixed(0) ?? "—"}/100</p>
+                  </div>
+                </div>
+                <div className="mt-2 grid grid-cols-3 gap-2 text-[10px] text-muted-foreground">
+                  <div className="rounded-lg bg-muted/60 p-2">
+                    <p className="font-semibold text-foreground">{dept.average_stress_resilience?.toFixed(0) ?? "—"}</p>
+                    <p>Resiliencia</p>
+                  </div>
+                  <div className="rounded-lg bg-muted/60 p-2">
+                    <p className="font-semibold text-foreground">{dept.average_empathy?.toFixed(0) ?? "—"}</p>
+                    <p>Empatía</p>
+                  </div>
+                  <div className="rounded-lg bg-muted/60 p-2">
+                    <p className="font-semibold text-foreground">{dept.burnout_avg?.toFixed(1) ?? "—"}</p>
+                    <p>Burnout</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </section>
+
+      <section className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <Card className="lg:col-span-12">
           <h2 className="mb-5 text-lg font-bold">Alertas detectadas por IA</h2>
           <ul className="space-y-3">
-            {[
-              {
-                t: "Aumento del estrés en Operaciones",
-                d: "Subió 14% en los últimos 7 días. Patrón vinculado a cambios de planificación.",
-                level: "Alta",
-                c: "border-brand-red/30 bg-brand-red/5 text-brand-red",
-              },
-              {
-                t: "Disminución de motivación en Marketing",
-                d: "Cayó 9% en 2 semanas. Recomendado abrir sesión de escucha activa.",
-                level: "Media",
-                c: "border-brand-amber/30 bg-brand-amber/5 text-brand-amber",
-              },
-              {
-                t: "Fatiga sostenida en Ingeniería",
-                d: "Riesgo de burnout en aumento. 3 reportes mencionan reuniones tempranas.",
-                level: "Media",
-                c: "border-brand-amber/30 bg-brand-amber/5 text-brand-amber",
-              },
-            ].map((a) => (
-              <li
-                key={a.t}
-                className={"grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 rounded-xl border p-4 " + a.c}
-              >
-                <AlertTriangle className="size-4 shrink-0" />
-                <div className="min-w-0 text-foreground">
-                  <p className="truncate text-sm font-semibold">{a.t}</p>
-                  <p className="text-xs text-muted-foreground">{a.d}</p>
-                </div>
-                <span className={"shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold"}>
-                  {a.level}
-                </span>
+            {alerts.length > 0 ? (
+              alerts.map((alert) => (
+                <li key={`${alert.type}-${alert.department}`} className={"grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 rounded-xl border p-4 " + (alert.severity === "critical" ? "border-brand-red/30 bg-brand-red/5 text-brand-red" : "border-brand-amber/30 bg-brand-amber/5 text-brand-amber")}>
+                  <AlertTriangle className="size-4 shrink-0" />
+                  <div className="min-w-0 text-foreground">
+                    <p className="truncate text-sm font-semibold">{alert.message}</p>
+                    <p className="text-xs text-muted-foreground">{alert.department}</p>
+                  </div>
+                  <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold">{alert.severity}</span>
+                </li>
+              ))
+            ) : (
+              <li className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
+                No hay alertas activas por el momento.
               </li>
-            ))}
+            )}
           </ul>
         </Card>
       </section>
 
-      {/* Nexus IA Chat */}
       <section className="relative z-10 mt-6 mb-24 lg:mb-0">
         <div className="mb-4">
           <h2 className="text-lg font-bold">Chat Nexus IA</h2>
-          <p className="text-xs text-muted-foreground">
-            Consulta en tiempo real sobre clima, estrés y bienestar del equipo
-          </p>
+          <p className="text-xs text-muted-foreground">Consulta en tiempo real sobre clima, estrés y bienestar del equipo</p>
         </div>
         <NexusChat />
       </section>
     </AppLayout>
+  );
+}
+
+function LineChart({ color = "var(--brand-blue)" }: { color?: string }) {
+  const points = [10, 28, 22, 40, 32, 52, 48, 60, 55, 72, 68, 80];
+  const max = 100;
+  const w = 100;
+  const h = 40;
+  const d = points
+    .map((v, i) => {
+      const x = (i / (points.length - 1)) * w;
+      const y = h - (v / max) * h;
+      return `${i === 0 ? "M" : "L"}${x},${y}`;
+    })
+    .join(" ");
+  const area = `${d} L${w},${h} L0,${h} Z`;
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="h-20 w-full" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id={`g-${color}`} x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.3" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={area} fill={`url(#g-${color})`} />
+      <path d={d} stroke={color} strokeWidth="1.5" fill="none" />
+    </svg>
   );
 }
 
@@ -255,33 +421,24 @@ function Legend({ color, label }: { color: string; label: string }) {
   );
 }
 
-function BarsChart() {
-  const weeks = Array.from({ length: 12 }, (_, i) => ({
-    clima: 50 + Math.sin(i / 2) * 12 + i * 1.5,
-    motiv: 45 + Math.cos(i / 2) * 14 + i,
-    estres: 70 - i * 1.8 + Math.sin(i) * 6,
-  }));
+function BarsChart({ trend }: { trend: TrendPoint[] }) {
+  const points = trend.length > 0 ? trend : Array.from({ length: 7 }, (_, i) => ({ pulse_date: `D${i + 1}`, stress_avg: 4 + i * 0.2, motivation_avg: 6 + i * 0.1, energy_avg: 5 + i * 0.2, respondents: 10 + i }));
+
   return (
     <div className="absolute inset-0 grid grid-cols-12 items-end gap-2">
-      {weeks.map((w, i) => (
-        <div key={i} className="flex h-full flex-col justify-end gap-1">
-          <div
-            className="rounded-t-sm bg-brand-emerald/80"
-            style={{ height: `${w.clima}%` }}
-          />
-          <div
-            className="rounded-t-sm bg-brand-purple/80"
-            style={{ height: `${w.motiv * 0.7}%` }}
-          />
-          <div
-            className="rounded-t-sm bg-brand-red/70"
-            style={{ height: `${w.estres * 0.5}%` }}
-          />
-          <div className="text-center text-[9px] text-muted-foreground">
-            S{i + 1}
+      {points.map((point, i) => {
+        const climate = Math.max(8, Math.min(96, (Number(point.energy_avg ?? 5) / 10) * 100));
+        const motivation = Math.max(8, Math.min(96, (Number(point.motivation_avg ?? 6) / 10) * 100));
+        const stress = Math.max(8, Math.min(96, (Number(point.stress_avg ?? 4) / 10) * 100));
+        return (
+          <div key={`${point.pulse_date}-${i}`} className="flex h-full flex-col justify-end gap-1">
+            <div className="rounded-t-sm bg-brand-emerald/80" style={{ height: `${climate}%` }} />
+            <div className="rounded-t-sm bg-brand-purple/80" style={{ height: `${motivation}%` }} />
+            <div className="rounded-t-sm bg-brand-red/70" style={{ height: `${stress}%` }} />
+            <div className="text-center text-[9px] text-muted-foreground">{point.pulse_date.slice(-2)}</div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

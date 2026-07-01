@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Lock, Mail, ShieldCheck } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { redirectIfAuthenticated } from "@/lib/auth-guard";
@@ -32,6 +32,30 @@ function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [socialLoading, setSocialLoading] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!active || !session) return;
+
+      const { data: profile } = await supabase
+        .from("digital_twin_profiles")
+        .select("user_id")
+        .eq("user_id", session.user.id)
+        .maybeSingle();
+
+      await navigate({ to: profile ? "/dashboard" : "/onboarding" });
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, [navigate]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -51,6 +75,33 @@ function LoginPage() {
     }
 
     await navigate({ to: "/home" });
+  }
+
+  async function handleGoogleSignIn() {
+    setError(null);
+    setSocialLoading(true);
+
+    const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+        queryParams: {
+          access_type: "offline",
+          prompt: "consent",
+        },
+      },
+    });
+
+    setSocialLoading(false);
+
+    if (oauthError) {
+      setError(oauthError.message);
+      return;
+    }
+
+    if (data?.url) {
+      window.location.assign(data.url);
+    }
   }
 
   return (
@@ -210,11 +261,16 @@ function LoginPage() {
 
             <button
               type="button"
-              className="flex w-full items-center justify-center gap-3 rounded-xl border border-border bg-card py-3 text-sm font-medium text-foreground transition hover:bg-muted"
+              onClick={handleGoogleSignIn}
+              disabled={socialLoading}
+              className="flex w-full items-center justify-center gap-3 rounded-xl border border-border bg-card py-3 text-sm font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
             >
               <GoogleIcon />
-              Continuar con Google
+              {socialLoading ? "Redirigiendo…" : "Continuar con Google"}
             </button>
+            <p className="text-center text-[11px] leading-relaxed text-muted-foreground">
+              Si aparece un error de proveedor, activa Google en Supabase Auth y añade la URL de redirección correcta.
+            </p>
           </form>
 
           <p className="mt-8 rounded-xl bg-muted/60 p-3 text-center text-[11px] leading-relaxed text-muted-foreground">

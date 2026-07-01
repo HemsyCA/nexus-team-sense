@@ -25,4 +25,11 @@ async function resolveClientOptions(): Promise<SupabaseClientOptions<"public">> 
 
 const clientOptions = await resolveClientOptions();
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, clientOptions);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  ...clientOptions,
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+  },
+});

@@ -144,3 +144,24 @@ export async function generateNexusReply(
 
   return text;
 }
+
+export async function generateContent(
+  history: GeminiHistoryMessage[] | Array<{ role: "user" | "assistant"; content: string }>,
+  customSystemPrompt?: string,
+): Promise<string> {
+  if (!history.length) {
+    throw new Error("No hay contenido para generar la respuesta.");
+  }
+
+  const lastMessage = history[history.length - 1];
+  const previousMessages = history.slice(0, -1);
+
+  return generateNexusReply(
+    previousMessages.map((message) => ({
+      role: message.role,
+      content: message.content,
+    })),
+    lastMessage.content,
+    customSystemPrompt,
+  );
+}

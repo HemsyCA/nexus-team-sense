@@ -20,6 +20,7 @@ import { Route as ConfiguracionRouteImport } from './routes/configuracion'
 import { Route as ChatRouteImport } from './routes/chat'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as OnboardingCompleteRouteImport } from './routes/onboarding/complete'
+import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
   id: '/verify-email',
@@ -76,6 +77,11 @@ const OnboardingCompleteRoute = OnboardingCompleteRouteImport.update({
   path: '/complete',
   getParentRoute: () => OnboardingRoute,
 } as any)
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/auth/callback',
+  path: '/auth/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -88,6 +94,7 @@ export interface FileRoutesByFullPath {
   '/register': typeof RegisterRoute
   '/simulaciones': typeof SimulacionesRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/onboarding/complete': typeof OnboardingCompleteRoute
 }
 export interface FileRoutesByTo {
@@ -101,6 +108,7 @@ export interface FileRoutesByTo {
   '/register': typeof RegisterRoute
   '/simulaciones': typeof SimulacionesRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/onboarding/complete': typeof OnboardingCompleteRoute
 }
 export interface FileRoutesById {
@@ -115,6 +123,7 @@ export interface FileRoutesById {
   '/register': typeof RegisterRoute
   '/simulaciones': typeof SimulacionesRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/onboarding/complete': typeof OnboardingCompleteRoute
 }
 export interface FileRouteTypes {
@@ -130,6 +139,7 @@ export interface FileRouteTypes {
     | '/register'
     | '/simulaciones'
     | '/verify-email'
+    | '/auth/callback'
     | '/onboarding/complete'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -143,6 +153,7 @@ export interface FileRouteTypes {
     | '/register'
     | '/simulaciones'
     | '/verify-email'
+    | '/auth/callback'
     | '/onboarding/complete'
   id:
     | '__root__'
@@ -156,6 +167,7 @@ export interface FileRouteTypes {
     | '/register'
     | '/simulaciones'
     | '/verify-email'
+    | '/auth/callback'
     | '/onboarding/complete'
   fileRoutesById: FileRoutesById
 }
@@ -170,6 +182,7 @@ export interface RootRouteChildren {
   RegisterRoute: typeof RegisterRoute
   SimulacionesRoute: typeof SimulacionesRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
+  AuthCallbackRoute: typeof AuthCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -251,6 +264,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OnboardingCompleteRouteImport
       parentRoute: typeof OnboardingRoute
     }
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/auth/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -277,6 +297,7 @@ const rootRouteChildren: RootRouteChildren = {
   RegisterRoute: RegisterRoute,
   SimulacionesRoute: SimulacionesRoute,
   VerifyEmailRoute: VerifyEmailRoute,
+  AuthCallbackRoute: AuthCallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
