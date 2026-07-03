@@ -43,12 +43,20 @@ function RegisterPage() {
 
       setLoading(false);
 
-      // supabase v2 returns { data, error }
       const { data, error } = res as any;
 
       if (error) {
-        // Prefer a human message when available
-        const message = error?.message ?? JSON.stringify(error) ?? "Error al crear la cuenta.";
+        console.error("Registro error (supabase):", error, res);
+        const extract = (e: any) => {
+          if (!e) return null;
+          if (typeof e === "string") return e;
+          if (e.message) return e.message;
+          if (e.error_description) return e.error_description;
+          if (e.msg) return e.msg;
+          if (e.hint) return e.hint;
+          return null;
+        };
+        const message = extract(error) ?? (Object.keys(error).length ? JSON.stringify(error) : null) ?? "Ocurrió un error al crear la cuenta. Revisa la consola para más detalles.";
         setError(message);
         return;
       }
@@ -60,9 +68,10 @@ function RegisterPage() {
 
       await navigate({ to: `/verify-email?email=${encodeURIComponent(email)}` });
     } catch (err) {
-      console.error("Registro error:", err);
+      console.error("Registro error (throw):", err);
       setLoading(false);
-      setError(err instanceof Error ? err.message : JSON.stringify(err));
+      const message = err instanceof Error ? err.message : (err && Object.keys(err).length ? JSON.stringify(err) : "Ocurrió un error al crear la cuenta. Revisa la consola para más detalles.");
+      setError(message as string);
     }
   }
 
