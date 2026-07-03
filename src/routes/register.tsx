@@ -33,30 +33,25 @@ function RegisterPage() {
     setError(null);
     setLoading(true);
     try {
-      const res = await supabase.auth.signUp(
-        { email, password },
-        {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
           data: { full_name: name },
           emailRedirectTo: `${window.location.origin}/onboarding`,
         },
-      );
+      });
 
       setLoading(false);
 
-      const { data, error } = res as any;
-
       if (error) {
-        console.error("Registro error (supabase):", error, res);
+        console.error("Registro error (supabase):", error);
         const extract = (e: any) => {
           if (!e) return null;
           if (typeof e === "string") return e;
-          if (e.message) return e.message;
-          if (e.error_description) return e.error_description;
-          if (e.msg) return e.msg;
-          if (e.hint) return e.hint;
-          return null;
+          return e?.message ?? e?.error_description ?? e?.msg ?? e?.hint ?? null;
         };
-        const message = extract(error) ?? (Object.keys(error).length ? JSON.stringify(error) : null) ?? "Ocurrió un error al crear la cuenta. Revisa la consola para más detalles.";
+        const message = extract(error) ?? "Ocurrió un error al crear la cuenta. Revisa la consola para más detalles.";
         setError(message);
         return;
       }
@@ -70,8 +65,8 @@ function RegisterPage() {
     } catch (err) {
       console.error("Registro error (throw):", err);
       setLoading(false);
-      const message = err instanceof Error ? err.message : (err && Object.keys(err).length ? JSON.stringify(err) : "Ocurrió un error al crear la cuenta. Revisa la consola para más detalles.");
-      setError(message as string);
+      const message = err instanceof Error ? err.message : "Ocurrió un error al crear la cuenta. Revisa la consola para más detalles.";
+      setError(message);
     }
   }
 
