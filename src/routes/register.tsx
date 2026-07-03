@@ -32,29 +32,38 @@ function RegisterPage() {
     event.preventDefault();
     setError(null);
     setLoading(true);
+    try {
+      const res = await supabase.auth.signUp(
+        { email, password },
+        {
+          data: { full_name: name },
+          emailRedirectTo: `${window.location.origin}/onboarding`,
+        },
+      );
 
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { full_name: name },
-        emailRedirectTo: `${window.location.origin}/onboarding`,
-      },
-    });
+      setLoading(false);
 
-    setLoading(false);
+      // supabase v2 returns { data, error }
+      const { data, error } = res as any;
 
-    if (error) {
-      setError(error.message);
-      return;
+      if (error) {
+        // Prefer a human message when available
+        const message = error?.message ?? JSON.stringify(error) ?? "Error al crear la cuenta.";
+        setError(message);
+        return;
+      }
+
+      if (data?.session) {
+        await navigate({ to: "/onboarding" });
+        return;
+      }
+
+      await navigate({ to: `/verify-email?email=${encodeURIComponent(email)}` });
+    } catch (err) {
+      console.error("Registro error:", err);
+      setLoading(false);
+      setError(err instanceof Error ? err.message : JSON.stringify(err));
     }
-
-    if (data.session) {
-      await navigate({ to: "/onboarding" });
-      return;
-    }
-
-    await navigate({ to: `/verify-email?email=${encodeURIComponent(email)}` });
   }
 
   return (
