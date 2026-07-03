@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { AppLayout, Card } from "@/components/AppLayout";
+import React from "react";
+import { AppLayout } from "@/components/AppLayout";
 import { NexusChat } from "@/components/NexusChat";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { requireAuthAndOnboarded } from "@/lib/auth-guard";
@@ -24,28 +25,27 @@ export const Route = createFileRoute("/chat")({
 });
 
 function ChatPage() {
-  return (
-    <AppLayout
-      title="Chat con Nexus IA"
-      subtitle="Tu asistente predictivo de bienestar organizacional"
-    >
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        <div className="lg:col-span-8">
-          <NexusChat className="h-[calc(100dvh-14rem)] lg:h-[calc(100vh-13rem)]" />
-        </div>
+  // Render NexusChat full-screen on mobile, inside AppLayout on desktop
+  const [isDesktop, setIsDesktop] = React.useState<boolean>(() => typeof window !== 'undefined' ? window.innerWidth >= 1024 : false);
 
-        <aside className="hidden space-y-5 lg:col-span-4 lg:block">
-          <Card className="bg-brand-navy text-black">
-            <div className="text-xs font-semibold uppercase tracking-wider text-brand-blue">
-              Modelo Nexus IA · Gemini
-            </div>
-            <p className="mt-3 text-sm leading-relaxed text-brand-navy/100">
-              Tono profesional, breve y empático. Las respuestas se basan en
-              comentarios anónimos del equipo y datos agregados — nunca
-              identifica personas.
-            </p>
-          </Card>
-        </aside>
+  React.useEffect(() => {
+    const m = window.matchMedia('(min-width: 1024px)');
+    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    m.addEventListener('change', handler);
+    setIsDesktop(m.matches);
+    return () => m.removeEventListener('change', handler);
+  }, []);
+
+  if (!isDesktop) {
+    return <div className="h-[100dvh] w-full"><NexusChat className="h-full" /></div>;
+  }
+
+  return (
+    <AppLayout title="Chat con Nexus IA" subtitle="Tu asistente predictivo de bienestar organizacional">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <div className="lg:col-span-12">
+          <NexusChat className="h-[calc(100vh-13rem)]" />
+        </div>
       </div>
     </AppLayout>
   );

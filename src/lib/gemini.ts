@@ -1,148 +1,80 @@
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-const model = "gemini-2.5-flash-lite";
+const apiKey = import.meta.env.VITE_CEREBRAS_API_KEY as string | undefined;
+const model = "llama-4-scout-17b-16e-instruct";
 
-export const NEXUS_SYSTEM_PROMPT =
-  "Eres Nexus IA, asistente especializado en clima laboral, bienestar organizacional y liderazgo. Analizas datos de equipos y das recomendaciones a líderes sobre motivación, burnout, estrés y comunicación. Eres profesional, empático y directo.";
+export const NEXUS_SYSTEM_PROMPT = `Eres Nexus IA, asistente 
+especializado en clima laboral, bienestar organizacional y liderazgo. 
+Analizas datos de equipos y das recomendaciones a líderes sobre 
+motivación, burnout, estrés y comunicación. 
+Eres profesional, empático y directo. Respondes siempre en español.`;
 
-export function buildContextualPrompt(profile?: {
-  emotional_intelligence_score?: number;
-  collaboration_index?: number;
-  stress_resilience?: number;
-  empathy_score?: number;
-  leadership_style?: string;
-  conflict_mode?: string;
-} | null, teamStats?: {
-  climaPromedio?: number;
-  totalComentarios?: number;
-  totalPerfiles?: number;
-} | null): string {
-  let prompt = NEXUS_SYSTEM_PROMPT;
-
-  if (profile) {
-    prompt += `
-
-PERFIL DEL USUARIO ACTUAL:
-- Inteligencia Emocional: ${profile.emotional_intelligence_score ?? "N/A"}/100
-- Índice de Colaboración: ${profile.collaboration_index ?? "N/A"}/100
-- Resiliencia al Estrés: ${profile.stress_resilience ?? "N/A"}/100
-- Empatía: ${profile.empathy_score ?? "N/A"}/100
-- Estilo de Liderazgo: ${profile.leadership_style ?? "N/A"}
-- Modo de Manejo de Conflictos: ${profile.conflict_mode ?? "N/A"}
-
-Usa estos datos para personalizar TODAS tus respuestas. 
-Cuando el usuario pregunte sobre su liderazgo, estrés o equipo, 
-refiere específicamente a sus scores.`;
-  }
-
-  if (teamStats) {
-    prompt += `
-
-DATOS DEL EQUIPO HOY:
-- Clima promedio: ${teamStats.climaPromedio ?? "N/A"}/5
-- Comentarios anónimos activos: ${teamStats.totalComentarios ?? 0}
-- Miembros con gemelo digital: ${teamStats.totalPerfiles ?? 0}
-
-Analiza estos datos cuando el usuario pregunte por el estado del equipo.`;
-  }
-
-  return prompt;
-}
 export type GeminiHistoryMessage = {
   role: "user" | "assistant";
   content: string;
 };
-
-type GeminiContent = {
-  role: "user" | "model";
-  parts: { text: string }[];
-};
-
-type GenerateContentResponse = {
-  candidates?: Array<{
-    content?: {
-      parts?: Array<{ text?: string }>;
-    };
-  }>;
-  error?: {
-    message?: string;
-    status?: string;
-  };
-};
-
-function getApiKey(): string {
-  if (!apiKey) {
-    throw new Error(
-      "Falta VITE_GEMINI_API_KEY en el archivo .env. Reinicia el servidor tras agregarla.",
-    );
-  }
-  return apiKey;
-}
-
-function toGeminiContents(
-  history: GeminiHistoryMessage[],
-  userMessage: string,
-  systemPrompt?: string,
-): GeminiContent[] {
-  const contents: GeminiContent[] = [];
-  
-  if (systemPrompt) {
-    contents.push({ role: "user", parts: [{ text: systemPrompt }] });
-    contents.push({ role: "model", parts: [{ text: "Entendido." }] });
-  }
-  
-  history.forEach((message) => {
-    contents.push({
-      role: message.role === "user" ? "user" : "model",
-      parts: [{ text: message.content }],
-    });
-  });
-
-  contents.push({ role: "user", parts: [{ text: userMessage }] });
-  return contents;
-}
 
 export async function generateNexusReply(
   history: GeminiHistoryMessage[],
   userMessage: string,
   customSystemPrompt?: string,
 ): Promise<string> {
-  if (typeof window === "undefined") {
-    throw new Error("El chat solo está disponible en el navegador.");
-  }
+  if (!apiKey) throw new Error("Falta VITE_CEREBRAS_API_KEY en .env");
 
-  const key = getApiKey();
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
+  const messages = [
+    { role: "system", content: customSystemPrompt ?? NEXUS_SYSTEM_PROMPT },
+    ...history.map(m => ({ role: m.role, content: m.content })),
+    { role: "user", content: userMessage }
+  ];
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-    contents: toGeminiContents(history, userMessage, customSystemPrompt ?? NEXUS_SYSTEM_PROMPT),
-    }),
-  });
-
-  let data: GenerateContentResponse;
-  try {
-    data = (await response.json()) as GenerateContentResponse;
-  } catch {
-    throw new Error(`Error HTTP ${response.status} al llamar a Gemini.`);
-  }
+  const response = await fetch(
+    "https://api.cerebras.ai/v1/chat/completions",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        max_completion_tokens: 1024,
+        temperature: 0.7,
+        top_p: 1,
+        stream: false,
+      }),
+    }
+  );
 
   if (!response.ok) {
-    const message =
-      data.error?.message ?? `Error HTTP ${response.status} al llamar a Gemini.`;
-    throw new Error(message);
+    const err = await response.json();
+    throw new Error(err?.message ?? `Error HTTP ${response.status}`);
   }
 
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-
-  if (!text) {
-    throw new Error("Gemini devolvió una respuesta vacía.");
-  }
-
+  const data = await response.json();
+  const text = data.choices?.[0]?.message?.content?.trim();
+  if (!text) throw new Error("Cerebras devolvió respuesta vacía.");
   return text;
+}
+
+// Mantener buildContextualPrompt igual que antes para el contexto del perfil
+export function buildContextualPrompt(profile?: any, teamStats?: any): string {
+  let prompt = NEXUS_SYSTEM_PROMPT;
+  if (profile) {
+    prompt += `\n\nPERFIL DEL USUARIO:
+- Inteligencia Emocional: ${profile.emotional_intelligence_score ?? 'N/A'}/100
+- Colaboración: ${profile.collaboration_index ?? 'N/A'}/100
+- Resiliencia al Estrés: ${profile.stress_resilience ?? 'N/A'}/100
+- Empatía: ${profile.empathy_score ?? 'N/A'}/100
+- Estilo de Liderazgo: ${profile.leadership_style ?? 'N/A'}
+- Modo de Conflicto: ${profile.conflict_mode ?? 'N/A'}
+Usa estos datos para personalizar todas tus respuestas.`;
+  }
+  if (teamStats) {
+    prompt += `\n\nDATOS DEL EQUIPO HOY:
+- Clima promedio: ${teamStats.climaPromedio ?? 'N/A'}/5
+- Comentarios activos: ${teamStats.totalComentarios ?? 0}
+- Miembros con gemelo digital: ${teamStats.totalPerfiles ?? 0}`;
+  }
+  return prompt;
 }
 
 export async function generateContent(
@@ -154,14 +86,7 @@ export async function generateContent(
   }
 
   const lastMessage = history[history.length - 1];
-  const previousMessages = history.slice(0, -1);
+  const previousMessages = history.slice(0, -1).map((m: any) => ({ role: m.role as "user" | "assistant", content: m.content }));
 
-  return generateNexusReply(
-    previousMessages.map((message) => ({
-      role: message.role,
-      content: message.content,
-    })),
-    lastMessage.content,
-    customSystemPrompt,
-  );
+  return generateNexusReply(previousMessages, lastMessage.content, customSystemPrompt);
 }
