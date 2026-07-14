@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { generateNexusReply, buildContextualPrompt, type GeminiHistoryMessage } from "@/lib/gemini";
+import { generateNexusReply, buildContextualPrompt, type ChatHistoryMessage } from "@/lib/nexus-ai";
 import { supabase } from "@/lib/supabase";
 
 export type ChatMessage = {
@@ -21,7 +21,7 @@ function createId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-function toHistory(messages: ChatMessage[]): GeminiHistoryMessage[] {
+function toHistory(messages: ChatMessage[]): ChatHistoryMessage[] {
   return messages
     .filter((message) => message.id !== "welcome")
     .map((message) => ({
@@ -234,15 +234,26 @@ export function useNexusChat() {
         await supabase.from("chat_sessions").update({ updated_at: new Date().toISOString() }).eq("id", activeSessionId);
       }
 
-      // Call model
+      // Call model, streaming tokens into a placeholder assistant message
+      const assistantId = createId();
+      let started = false;
       const response = await generateNexusReply(
         history,
         trimmed,
-        systemPrompt || undefined
+        systemPrompt || undefined,
+        (partial) => {
+          if (!started) {
+            started = true;
+            setMessages((prev) => [...prev, { id: assistantId, role: "assistant", content: partial } as ChatMessage]);
+          } else {
+            setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: partial } : m)));
+          }
+        },
       );
 
-      const assistantMsg = { id: createId(), role: "assistant", content: response } as ChatMessage;
-      setMessages((prev) => [...prev, assistantMsg]);
+      if (!started) {
+        setMessages((prev) => [...prev, { id: assistantId, role: "assistant", content: response } as ChatMessage]);
+      }
 
       // Insert assistant message into Supabase and refresh sessions
       await supabase.from("chat_messages").insert([{ session_id: activeSessionId, user_id: session.user.id, role: "assistant", content: response }]);

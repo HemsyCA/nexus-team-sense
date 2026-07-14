@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/lib/supabase";
 import type { DigitalTwinProfile } from "@/types/assessment";
-import { generateContent } from "@/lib/gemini";
+import { generateContent } from "@/lib/nexus-ai";
 
 export function DigitalTwinReady() {
   const [profile, setProfile] = useState<DigitalTwinProfile | null>(null);
@@ -43,7 +43,7 @@ Genera exactamente estas 3 secciones, sé directo y accionable, máximo 180 pala
     }]);
     setAiAnalysis(response);
   } catch (err) {
-    console.error("Error Gemini:", err);
+    console.error("Error Nexus IA:", err);
   } finally {
     setLoadingAI(false);
   }

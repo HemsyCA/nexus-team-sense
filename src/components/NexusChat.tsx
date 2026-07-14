@@ -57,6 +57,11 @@ export function NexusChat({ className }: NexusChatProps) {
   const [initials, setInitials] = useState<string>("LD");
   const lastMsgRef = useRef<HTMLDivElement | null>(null);
 
+  // Once the assistant's reply starts streaming in, the growing text itself
+  // is the "typing" signal — the dots indicator is only for the gap before
+  // the first token arrives.
+  const showTypingDots = isTyping && messages[messages.length - 1]?.role !== "assistant";
+
   useEffect(() => {
     // scroll last message into view smoothly
     lastMsgRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -132,7 +137,7 @@ export function NexusChat({ className }: NexusChatProps) {
                 </div>
               ))}
 
-              {isTyping && (
+              {showTypingDots && (
                 <div className="flex items-start gap-2">
                   <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-purple/20 text-brand-purple"> <Sparkles className="size-3.5" /> </div>
                   <div className="rounded-2xl rounded-tl-md border border-white/10 bg-white/5 px-5 py-4">
