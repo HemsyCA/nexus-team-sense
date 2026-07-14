@@ -1,4 +1,4 @@
-import { Send, Sparkles } from "lucide-react";
+import { Send, Sparkles, Wand2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { useNexusChat } from "@/hooks/useNexusChat";
@@ -8,6 +8,14 @@ import { supabase } from "@/lib/supabase";
 type NexusChatProps = {
   className?: string;
 };
+
+const COACHING_CASES = [
+  "Un miembro del equipo muestra señales de burnout",
+  "Necesito dar feedback difícil a un top performer",
+  "Dos colaboradores están en conflicto por prioridades",
+  "Mi equipo está desmotivado tras un cambio organizacional",
+  "Un colaborador con bajo desempeño no reacciona al feedback",
+];
 
 function getInitials(name?: string | null, email?: string | null) {
   if (name) {
@@ -53,9 +61,37 @@ function parseMarkdown(text: string) {
 }
 
 export function NexusChat({ className }: NexusChatProps) {
-  const { messages, input, setInput, isTyping, error, sendMessage, handleSubmit, sessions, activeSessionId, loadSession, newSession } = useNexusChat();
+  const {
+    messages,
+    input,
+    setInput,
+    isTyping,
+    error,
+    sendMessage,
+    handleSubmit,
+    sessions,
+    activeSessionId,
+    loadSession,
+    newSession,
+    startCaseSession,
+    generateCaseSuggestion,
+  } = useNexusChat();
   const [initials, setInitials] = useState<string>("LD");
+  const [isGeneratingCase, setIsGeneratingCase] = useState(false);
   const lastMsgRef = useRef<HTMLDivElement | null>(null);
+
+  async function handleGenerateCase() {
+    if (isGeneratingCase || isTyping) return;
+    setIsGeneratingCase(true);
+    try {
+      const caseText = await generateCaseSuggestion();
+      await startCaseSession(caseText);
+    } catch (err) {
+      console.error("Error generando caso de coaching:", err);
+    } finally {
+      setIsGeneratingCase(false);
+    }
+  }
 
   // Once the assistant's reply starts streaming in, the growing text itself
   // is the "typing" signal — the dots indicator is only for the gap before
@@ -150,6 +186,33 @@ export function NexusChat({ className }: NexusChatProps) {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Coaching cases */}
+          <div className="border-t border-white/10 bg-brand-navy/60 px-4 py-3">
+            <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-brand-blue">
+              <Wand2 className="size-3" /> Casos de coaching
+            </div>
+            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+              <button
+                onClick={() => void handleGenerateCase()}
+                disabled={isGeneratingCase || isTyping}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-brand-purple/40 bg-brand-purple/15 px-3 py-1.5 text-xs font-semibold text-brand-purple transition hover:bg-brand-purple/25 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Sparkles className="size-3" />
+                {isGeneratingCase ? "Generando…" : "Proponme un caso"}
+              </button>
+              {COACHING_CASES.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => void startCaseSession(c)}
+                  disabled={isGeneratingCase || isTyping}
+                  className="shrink-0 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-white/80 transition hover:border-brand-blue hover:text-brand-blue disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {c}
+                </button>
+              ))}
             </div>
           </div>
 

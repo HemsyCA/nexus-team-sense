@@ -5,6 +5,7 @@ import { AppLayout, Card } from "@/components/AppLayout";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { requireAuthAndOnboarded } from "@/lib/auth-guard";
 import { supabase } from "@/lib/supabase";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/feed")({
   beforeLoad: requireAuthAndOnboarded,
@@ -38,10 +39,22 @@ type FeedPost = {
   ai_tags: unknown;
 };
 
+type PollOption = { id: string; label: string; position: number; votes: number };
+type Poll = { id: string; question: string; options: PollOption[]; myVoteOptionId: string | null };
+
+const SENTIMENT_FILTERS = [
+  { value: "all", label: "Todos" },
+  { value: "positive", label: "Positivo" },
+  { value: "neutral", label: "Neutral" },
+  { value: "negative", label: "Negativo" },
+] as const;
+
 function FeedPage() {
   const [active, setActive] = useState("Todos");
+  const [sentimentFilter, setSentimentFilter] = useState<(typeof SENTIMENT_FILTERS)[number]["value"]>("all");
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [areas, setAreas] = useState<string[]>([]);
+  const [polls, setPolls] = useState<Poll[]>([]);
   const [draft, setDraft] = useState("");
   const [isPosting, setIsPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,17 +62,10 @@ function FeedPage() {
   const filters = ["Todos", ...areas];
 
   async function loadPosts() {
-    const [{ data: feedData, error: feedError }, { data: departmentsData }, { data: profilesData }] =
-      await Promise.all([
-        supabase
-          .from("daily_feeds")
-          .select(
-            "id, user_id, anonymous_code, content, sentiment, burnout_score, stress_score, motivation_score, ai_tags, created_at",
-          )
-          .order("created_at", { ascending: false }),
-        supabase.from("departments").select("id, name, code").order("name"),
-        supabase.from("profiles").select("user_id, department_id"),
-      ]);
+    const { data: feedData, error: feedError } = await supabase
+      .from("feed_enriched")
+      .select("*")
+      .order("created_at", { ascending: false });
 
     if (feedError) {
       console.error("Error cargando feed", feedError);
@@ -67,30 +73,11 @@ function FeedPage() {
       return;
     }
 
-    const departmentMap = new Map(
-      ((departmentsData as Array<{ id: string; name: string; code: string | null }> | null) ?? []).map(
-        (department) => [department.id, department],
-      ),
-    );
-
-    const allDepartmentAreas = ((departmentsData as Array<{ name: string | null }> | null) ?? [])
-      .map((department) => department.name)
-      .filter((name): name is string => Boolean(name))
-      .sort();
-
-    const departmentByUser = new Map<string, string | null>();
-    ((profilesData as Array<{ user_id: string; department_id: string | null }> | null) ?? []).forEach(
-      (profile) => {
-        const department = profile.department_id ? departmentMap.get(profile.department_id) : null;
-        departmentByUser.set(profile.user_id, department?.name ?? null);
-      },
-    );
-
     const normalizedPosts = ((feedData as Array<Record<string, unknown>> | null) ?? []).map((row) => ({
       id: String(row.id),
       anonymous_code: row.anonymous_code as string | null,
-      department_name: departmentByUser.get(String(row.user_id)) ?? null,
-      department_code: null,
+      department_name: row.department_name as string | null,
+      department_code: row.department_code as string | null,
       created_at: row.created_at as string | null,
       content: String(row.content ?? ""),
       sentiment: row.sentiment as string | null,
@@ -101,7 +88,7 @@ function FeedPage() {
     }));
 
     const availableAreas = Array.from(
-      new Set([...allDepartmentAreas, ...(normalizedPosts.map((post) => post.department_name).filter(Boolean) as string[])]),
+      new Set(normalizedPosts.map((post) => post.department_name).filter(Boolean) as string[]),
     ).sort();
 
     setPosts(normalizedPosts);
@@ -109,13 +96,76 @@ function FeedPage() {
     setError(null);
   }
 
+  async function loadPolls() {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const userId = sessionData.session?.user.id;
+
+    const [{ data: pollsData }, { data: optionsData }, { data: resultsData }, myVotesResult] = await Promise.all([
+      supabase.from("feed_polls").select("id, question").order("created_at", { ascending: false }),
+      supabase.from("feed_poll_options").select("id, poll_id, label, position").order("position", { ascending: true }),
+      supabase.from("feed_poll_results").select("poll_id, option_id, votes"),
+      userId
+        ? supabase.from("feed_poll_votes").select("poll_id, option_id").eq("user_id", userId)
+        : Promise.resolve({ data: [] as Array<{ poll_id: string; option_id: string }> }),
+    ]);
+
+    const votesByOption = new Map<string, number>();
+    ((resultsData as Array<{ poll_id: string; option_id: string; votes: number }> | null) ?? []).forEach((r) => {
+      votesByOption.set(r.option_id, r.votes);
+    });
+
+    const myVoteByPoll = new Map<string, string>();
+    ((myVotesResult.data as Array<{ poll_id: string; option_id: string }> | null) ?? []).forEach((v) => {
+      myVoteByPoll.set(v.poll_id, v.option_id);
+    });
+
+    const optionsByPoll = new Map<string, PollOption[]>();
+    ((optionsData as Array<{ id: string; poll_id: string; label: string; position: number }> | null) ?? []).forEach(
+      (opt) => {
+        const list = optionsByPoll.get(opt.poll_id) ?? [];
+        list.push({ id: opt.id, label: opt.label, position: opt.position, votes: votesByOption.get(opt.id) ?? 0 });
+        optionsByPoll.set(opt.poll_id, list);
+      },
+    );
+
+    const assembledPolls = ((pollsData as Array<{ id: string; question: string }> | null) ?? []).map((poll) => ({
+      id: poll.id,
+      question: poll.question,
+      options: optionsByPoll.get(poll.id) ?? [],
+      myVoteOptionId: myVoteByPoll.get(poll.id) ?? null,
+    }));
+
+    setPolls(assembledPolls);
+  }
+
+  async function handleVote(pollId: string, optionId: string) {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const userId = sessionData.session?.user.id;
+    if (!userId) return;
+
+    const { error: voteError } = await supabase
+      .from("feed_poll_votes")
+      .insert({ poll_id: pollId, option_id: optionId, user_id: userId });
+
+    if (voteError) {
+      console.error("Error votando", voteError);
+      return;
+    }
+
+    await loadPolls();
+  }
+
   useEffect(() => {
     void loadPosts();
+    void loadPolls();
 
     const channel = supabase
       .channel("feed-live")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "daily_feeds" }, () => {
         void loadPosts();
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "feed_poll_votes" }, () => {
+        void loadPolls();
       })
       .subscribe();
 
@@ -134,6 +184,16 @@ function FeedPage() {
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const userId = sessionData.session?.user.id;
+
+      let departmentId: string | null = null;
+      if (userId) {
+        const { data: myProfile } = await supabase
+          .from("profiles")
+          .select("department_id")
+          .eq("user_id", userId)
+          .maybeSingle();
+        departmentId = myProfile?.department_id ?? null;
+      }
 
       const lowerText = trimmed.toLowerCase();
       let sentiment: "positive" | "neutral" | "negative" = "neutral";
@@ -155,6 +215,7 @@ function FeedPage() {
 
       const { error: insertError } = await supabase.from("daily_feeds").insert({
         user_id: userId,
+        department_id: departmentId,
         anonymous_code: `COL-${Math.floor(100 + Math.random() * 900)}`,
         content: trimmed,
         sentiment,
@@ -243,6 +304,29 @@ function FeedPage() {
             })}
           </div>
 
+          <div className="mb-5 flex items-center gap-2 overflow-x-auto pb-1">
+            <div className="flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground">
+              Sentimiento
+            </div>
+            {SENTIMENT_FILTERS.map((f) => {
+              const isActive = f.value === sentimentFilter;
+              return (
+                <button
+                  key={f.value}
+                  onClick={() => setSentimentFilter(f.value)}
+                  className={
+                    "shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition " +
+                    (isActive
+                      ? "border-brand-blue bg-brand-blue/10 text-brand-blue"
+                      : "border-border bg-card text-muted-foreground hover:text-foreground")
+                  }
+                >
+                  {f.label}
+                </button>
+              );
+            })}
+          </div>
+
           {error ? (
             <div className="mb-4 rounded-xl border border-brand-red/30 bg-brand-red/5 p-3 text-sm text-brand-red">
               {error}
@@ -250,24 +334,33 @@ function FeedPage() {
           ) : null}
 
           <div className="space-y-4">
-            {posts.filter((post) => active === "Todos" || post.department_name === active).length > 0 ? (
-              posts
-                .filter((post) => active === "Todos" || post.department_name === active)
-                .map((p) => <PostCard key={p.id} post={p} />)
-            ) : (
-              <Card>
-                <p className="text-sm text-muted-foreground">
-                  {active === "Todos"
-                    ? "Aún no hay comentarios en Supabase."
-                    : `No hay comentarios para ${active} todavía.`}
-                </p>
-              </Card>
-            )}
+            {(() => {
+              const filtered = posts.filter(
+                (post) =>
+                  (active === "Todos" || post.department_name === active) &&
+                  (sentimentFilter === "all" || post.sentiment === sentimentFilter),
+              );
+              return filtered.length > 0 ? (
+                filtered.map((p) => <PostCard key={p.id} post={p} />)
+              ) : (
+                <Card>
+                  <p className="text-sm text-muted-foreground">
+                    {active === "Todos" && sentimentFilter === "all"
+                      ? "Aún no hay comentarios en Supabase."
+                      : "No hay comentarios que coincidan con estos filtros."}
+                  </p>
+                </Card>
+              );
+            })()}
           </div>
         </div>
 
         {/* Sidebar insights */}
         <aside className="space-y-5 lg:col-span-4">
+          {polls.map((poll) => (
+            <PollCard key={poll.id} poll={poll} onVote={(optionId) => void handleVote(poll.id, optionId)} />
+          ))}
+
           <Card>
             <h3 className="text-sm font-bold">Emociones predominantes</h3>
             <p className="mb-4 text-[11px] text-muted-foreground">Hoy · 124 respuestas</p>
@@ -303,6 +396,60 @@ function FeedPage() {
         </aside>
       </div>
     </AppLayout>
+  );
+}
+
+function PollCard({ poll, onVote }: { poll: Poll; onVote: (optionId: string) => void }) {
+  const totalVotes = poll.options.reduce((sum, opt) => sum + opt.votes, 0);
+  const hasVoted = poll.myVoteOptionId !== null;
+
+  return (
+    <Card>
+      <div className="mb-1 inline-flex items-center gap-2 rounded-full bg-brand-blue/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-brand-blue">
+        Encuesta del equipo
+      </div>
+      <p className="mt-2 text-sm font-semibold">{poll.question}</p>
+      <ul className="mt-4 space-y-2">
+        {poll.options.map((option) => {
+          const pct = totalVotes > 0 ? Math.round((option.votes / totalVotes) * 100) : 0;
+          const isMine = poll.myVoteOptionId === option.id;
+
+          if (!hasVoted) {
+            return (
+              <li key={option.id}>
+                <button
+                  onClick={() => onVote(option.id)}
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-left text-xs font-medium text-foreground transition hover:border-brand-blue hover:text-brand-blue"
+                >
+                  {option.label}
+                </button>
+              </li>
+            );
+          }
+
+          return (
+            <li key={option.id}>
+              <div className="mb-1 flex items-center justify-between text-xs">
+                <span className={cn("font-medium", isMine && "text-brand-blue")}>
+                  {option.label}
+                  {isMine ? " · Tu voto" : ""}
+                </span>
+                <span className="text-muted-foreground">{pct}%</span>
+              </div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                <div
+                  className={cn("h-full", isMine ? "bg-brand-blue" : "bg-muted-foreground/40")}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      {hasVoted && (
+        <p className="mt-3 text-[11px] text-muted-foreground">{totalVotes} {totalVotes === 1 ? "voto" : "votos"} en total</p>
+      )}
+    </Card>
   );
 }
 

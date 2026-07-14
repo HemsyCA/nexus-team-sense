@@ -184,9 +184,9 @@ export function useNexusChat() {
     }
   }, [sessions]);
 
-  const newSession = useCallback(async () => {
+  const newSession = useCallback(async (): Promise<string | null> => {
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
+    if (!session) return null;
     const { data: newSession } = await supabase
       .from("chat_sessions")
       .insert([{ user_id: session.user.id, title: "Nueva conversación" }])
@@ -197,15 +197,18 @@ export function useNexusChat() {
       setActiveSessionId(newSession.id);
       setSessionTitle(newSession.title);
       setMessages([WELCOME_MESSAGE]);
+      return newSession.id;
     }
+    return null;
   }, []);
 
-  const sendMessage = useCallback(async (text: string) => {
+  const sendMessage = useCallback(async (text: string, sessionIdOverride?: string) => {
     const trimmed = text.trim();
     if (!trimmed || isTypingRef.current) return;
 
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session || !activeSessionId) return;
+    const targetSessionId = sessionIdOverride ?? activeSessionId;
+    if (!session || !targetSessionId) return;
 
     const userMessage: ChatMessage = {
       id: createId(),
@@ -213,25 +216,28 @@ export function useNexusChat() {
       content: trimmed,
     };
 
-    const history = toHistory(messagesRef.current);
+    // Starting a fresh session (sessionIdOverride) never has prior context —
+    // messagesRef could still hold the previous session's messages for a beat
+    // since newSession()'s setMessages hasn't necessarily flushed yet.
+    const history = sessionIdOverride ? [] : toHistory(messagesRef.current);
 
     isTypingRef.current = true;
-    setMessages((prev) => [...prev, userMessage]);
+    setMessages((prev) => (sessionIdOverride ? [userMessage] : [...prev, userMessage]));
     setInput("");
     setError(null);
     setIsTyping(true);
 
     try {
       // Insert user message into Supabase
-      await supabase.from("chat_messages").insert([{ session_id: activeSessionId, user_id: session.user.id, role: "user", content: trimmed }]);
+      await supabase.from("chat_messages").insert([{ session_id: targetSessionId, user_id: session.user.id, role: "user", content: trimmed }]);
 
       // If session title is default, update with the first 40 chars of user's first message
-      if (!sessionTitle || sessionTitle === "Nueva conversación") {
+      if (!sessionTitle || sessionTitle === "Nueva conversación" || sessionIdOverride) {
         const newTitle = trimmed.slice(0, 40);
-        await supabase.from("chat_sessions").update({ title: newTitle, updated_at: new Date().toISOString() }).eq("id", activeSessionId);
+        await supabase.from("chat_sessions").update({ title: newTitle, updated_at: new Date().toISOString() }).eq("id", targetSessionId);
         setSessionTitle(newTitle);
       } else {
-        await supabase.from("chat_sessions").update({ updated_at: new Date().toISOString() }).eq("id", activeSessionId);
+        await supabase.from("chat_sessions").update({ updated_at: new Date().toISOString() }).eq("id", targetSessionId);
       }
 
       // Call model, streaming tokens into a placeholder assistant message
@@ -256,7 +262,7 @@ export function useNexusChat() {
       }
 
       // Insert assistant message into Supabase and refresh sessions
-      await supabase.from("chat_messages").insert([{ session_id: activeSessionId, user_id: session.user.id, role: "assistant", content: response }]);
+      await supabase.from("chat_messages").insert([{ session_id: targetSessionId, user_id: session.user.id, role: "assistant", content: response }]);
       await refreshSessions();
     } catch (err) {
       console.error("Error en Nexus IA:", err);
@@ -279,6 +285,24 @@ export function useNexusChat() {
     [input, sendMessage],
   );
 
+  // Starts a brand-new session seeded with a coaching case as the first
+  // message, instead of the user typing it in manually.
+  const startCaseSession = useCallback(
+    async (caseText: string) => {
+      const newId = await newSession();
+      if (!newId) return;
+      await sendMessage(caseText, newId);
+    },
+    [newSession, sendMessage],
+  );
+
+  const generateCaseSuggestion = useCallback(async (): Promise<string> => {
+    const instruction =
+      "Propón UN caso de coaching de liderazgo realista y breve (máximo 3 líneas) para que un líder lo trabaje contigo. " +
+      "Usa el contexto del perfil/equipo si está disponible. Devuelve SOLO el texto del caso, sin explicaciones ni encabezados.";
+    return generateNexusReply([], instruction, systemPrompt || undefined);
+  }, [systemPrompt]);
+
   return {
     messages,
     input,
@@ -291,5 +315,7 @@ export function useNexusChat() {
     activeSessionId,
     loadSession,
     newSession,
+    startCaseSession,
+    generateCaseSuggestion,
   };
 }
