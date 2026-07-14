@@ -2,7 +2,7 @@ import { Send, Sparkles, Wand2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { useNexusChat } from "@/hooks/useNexusChat";
-import { cn } from "@/lib/utils";
+import { cn, getInitials } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 
 type NexusChatProps = {
@@ -16,16 +16,6 @@ const COACHING_CASES = [
   "Mi equipo está desmotivado tras un cambio organizacional",
   "Un colaborador con bajo desempeño no reacciona al feedback",
 ];
-
-function getInitials(name?: string | null, email?: string | null) {
-  if (name) {
-    const parts = name.split(" ").filter(Boolean);
-    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-    return (parts[0][0] + (parts[1]?.[0] ?? "")).toUpperCase();
-  }
-  if (email) return email.slice(0, 2).toUpperCase();
-  return "LD";
-}
 
 function timeAgo(dateStr?: string) {
   if (!dateStr) return "hace un momento";
@@ -76,7 +66,7 @@ export function NexusChat({ className }: NexusChatProps) {
     startCaseSession,
     generateCaseSuggestion,
   } = useNexusChat();
-  const [initials, setInitials] = useState<string>("LD");
+  const [initials, setInitials] = useState<string>("NX");
   const [isGeneratingCase, setIsGeneratingCase] = useState(false);
   const lastMsgRef = useRef<HTMLDivElement | null>(null);
 

@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as SimulacionesRouteImport } from './routes/simulaciones'
 import { Route as RegisterRouteImport } from './routes/register'
+import { Route as PerfilRouteImport } from './routes/perfil'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as HomeRouteImport } from './routes/home'
 import { Route as FeedRouteImport } from './routes/feed'
@@ -35,6 +36,11 @@ const SimulacionesRoute = SimulacionesRouteImport.update({
 const RegisterRoute = RegisterRouteImport.update({
   id: '/register',
   path: '/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PerfilRoute = PerfilRouteImport.update({
+  id: '/perfil',
+  path: '/perfil',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OnboardingRoute = OnboardingRouteImport.update({
@@ -91,6 +97,7 @@ export interface FileRoutesByFullPath {
   '/feed': typeof FeedRoute
   '/home': typeof HomeRoute
   '/onboarding': typeof OnboardingRouteWithChildren
+  '/perfil': typeof PerfilRoute
   '/register': typeof RegisterRoute
   '/simulaciones': typeof SimulacionesRoute
   '/verify-email': typeof VerifyEmailRoute
@@ -105,6 +112,7 @@ export interface FileRoutesByTo {
   '/feed': typeof FeedRoute
   '/home': typeof HomeRoute
   '/onboarding': typeof OnboardingRouteWithChildren
+  '/perfil': typeof PerfilRoute
   '/register': typeof RegisterRoute
   '/simulaciones': typeof SimulacionesRoute
   '/verify-email': typeof VerifyEmailRoute
@@ -120,6 +128,7 @@ export interface FileRoutesById {
   '/feed': typeof FeedRoute
   '/home': typeof HomeRoute
   '/onboarding': typeof OnboardingRouteWithChildren
+  '/perfil': typeof PerfilRoute
   '/register': typeof RegisterRoute
   '/simulaciones': typeof SimulacionesRoute
   '/verify-email': typeof VerifyEmailRoute
@@ -136,6 +145,7 @@ export interface FileRouteTypes {
     | '/feed'
     | '/home'
     | '/onboarding'
+    | '/perfil'
     | '/register'
     | '/simulaciones'
     | '/verify-email'
@@ -150,6 +160,7 @@ export interface FileRouteTypes {
     | '/feed'
     | '/home'
     | '/onboarding'
+    | '/perfil'
     | '/register'
     | '/simulaciones'
     | '/verify-email'
@@ -164,6 +175,7 @@ export interface FileRouteTypes {
     | '/feed'
     | '/home'
     | '/onboarding'
+    | '/perfil'
     | '/register'
     | '/simulaciones'
     | '/verify-email'
@@ -179,6 +191,7 @@ export interface RootRouteChildren {
   FeedRoute: typeof FeedRoute
   HomeRoute: typeof HomeRoute
   OnboardingRoute: typeof OnboardingRouteWithChildren
+  PerfilRoute: typeof PerfilRoute
   RegisterRoute: typeof RegisterRoute
   SimulacionesRoute: typeof SimulacionesRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
@@ -206,6 +219,13 @@ declare module '@tanstack/react-router' {
       path: '/register'
       fullPath: '/register'
       preLoaderRoute: typeof RegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/perfil': {
+      id: '/perfil'
+      path: '/perfil'
+      fullPath: '/perfil'
+      preLoaderRoute: typeof PerfilRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/onboarding': {
@@ -294,6 +314,7 @@ const rootRouteChildren: RootRouteChildren = {
   FeedRoute: FeedRoute,
   HomeRoute: HomeRoute,
   OnboardingRoute: OnboardingRouteWithChildren,
+  PerfilRoute: PerfilRoute,
   RegisterRoute: RegisterRoute,
   SimulacionesRoute: SimulacionesRoute,
   VerifyEmailRoute: VerifyEmailRoute,

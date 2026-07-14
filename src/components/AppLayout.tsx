@@ -9,9 +9,11 @@ import {
   Home as HomeIcon,
   LogOut,
 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { signOut } from "@/lib/auth";
+import { supabase } from "@/lib/supabase";
+import { getInitials } from "@/lib/utils";
 
 const nav = [
   { to: "/home", label: "Inicio", icon: HomeIcon },
@@ -34,6 +36,14 @@ export function AppLayout({
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
   const [loggingOut, setLoggingOut] = useState(false);
+  const [initials, setInitials] = useState("NX");
+
+  useEffect(() => {
+    void (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setInitials(getInitials(user?.user_metadata?.full_name ?? null, user?.email ?? null));
+    })();
+  }, []);
 
   async function handleLogout() {
     if (loggingOut) return;
@@ -135,9 +145,13 @@ export function AppLayout({
                 {loggingOut ? "Saliendo…" : "Cerrar sesión"}
               </span>
             </button>
-            <div className="grid size-10 place-items-center rounded-full bg-gradient-to-br from-brand-blue to-brand-purple text-sm font-bold text-white outline-2 outline-white">
-              LD
-            </div>
+            <Link
+              to="/perfil"
+              title="Mi perfil"
+              className="grid size-10 place-items-center rounded-full bg-gradient-to-br from-brand-blue to-brand-purple text-sm font-bold text-white outline-2 outline-white transition hover:opacity-90"
+            >
+              {initials}
+            </Link>
           </div>
         </header>
 
