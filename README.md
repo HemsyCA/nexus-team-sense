@@ -1,6 +1,3 @@
-puedes ver el proyecto en: https://nexus-team-sense-6pnplmwzq-hcardenasarz-7743s-projects.vercel.app/feed 
-
-
 # 🧭 Nexus Lead IA
 
 **Nexus Lead IA** es un prototipo de plataforma de bienestar organizacional e inteligencia artificial para líderes de equipo. Combina datos anónimos del clima laboral con coaching impulsado por IA para ayudar a detectar burnout, estrés y desmotivación antes de que se conviertan en un problema.
