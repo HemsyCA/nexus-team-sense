@@ -42,6 +42,7 @@ type DepartmentIndicator = {
   department_code: string | null;
   headcount: number | null;
   members_with_profile: number | null;
+  is_reportable: boolean | null;
   burnout_avg: number | null;
   motivation_avg: number | null;
   rotation_risk_score: number | null;
@@ -83,95 +84,25 @@ function DashboardPage() {
     setError(null);
 
     try {
-      const [
-        { data: departmentsData },
-        { data: profilesData },
-        { data: feedData },
-        { data: pulseData },
-        { data: twinData },
-        { data: trendData },
-        { data: alertData },
-      ] = await Promise.all([
-        supabase.from("departments").select("id, name, code, headcount").order("name"),
-        supabase.from("profiles").select("user_id, department_id"),
-        supabase.from("daily_feeds").select("user_id, sentiment, burnout_score, stress_score, motivation_score, created_at"),
-        supabase.from("daily_pulse").select("user_id, stress_level, motivation_level, energy_level, pulse_date"),
-        supabase.from("digital_twin_profiles").select("user_id, emotional_intelligence_score, collaboration_index, stress_resilience, empathy_score"),
+      // Aggregated views: RLS only lets each user read their own rows in the
+      // base tables, so org/department numbers must come from these views
+      // (departments with < 3 profiles come back with null metrics).
+      const [org, depts, trendRes, alertRes] = await Promise.all([
+        supabase.from("org_indicators").select("*").maybeSingle(),
+        supabase.from("dept_indicators").select("*"),
         supabase.from("pulse_trend_14d").select("*").order("pulse_date", { ascending: true }),
         supabase.rpc("get_active_alerts"),
       ]);
 
-      const departmentRows = ((departmentsData as Array<{ id: string; name: string; code: string | null; headcount: number | null }> | null) ?? []).map((department) => {
-        const members = ((profilesData as Array<{ user_id: string; department_id: string | null }> | null) ?? []).filter(
-          (profile) => profile.department_id === department.id,
-        );
-        const memberIds = members.map((member) => member.user_id);
-        const testRows = ((twinData as Array<{ user_id: string; emotional_intelligence_score: number | null; collaboration_index: number | null; stress_resilience: number | null; empathy_score: number | null }> | null) ?? []).filter(
-          (row) => memberIds.includes(row.user_id),
-        );
-        const feedRows = ((feedData as Array<{ user_id: string | null; sentiment: string | null; burnout_score: number | null; stress_score: number | null; motivation_score: number | null; created_at: string | null }> | null) ?? []).filter(
-          (row) => row.user_id && memberIds.includes(row.user_id),
-        );
+      const firstError = org.error ?? depts.error ?? trendRes.error ?? alertRes.error;
+      if (firstError) throw firstError;
 
-        const average = (values: Array<number | null | undefined>) => {
-          const validValues = values.filter((value): value is number => typeof value === "number");
-          return validValues.length > 0 ? validValues.reduce((sum, value) => sum + value, 0) / validValues.length : null;
-        };
+      const departmentRows = (depts.data as DepartmentIndicator[] | null) ?? [];
 
-        return {
-          department_name: department.name,
-          department_code: department.code,
-          headcount: department.headcount ?? memberIds.length,
-          members_with_profile: memberIds.length,
-          burnout_avg: average(feedRows.map((row) => row.burnout_score)),
-          motivation_avg: average(feedRows.map((row) => row.motivation_score)),
-          rotation_risk_score: average([
-            average(feedRows.map((row) => row.burnout_score)),
-            average(testRows.map((row) => row.stress_resilience)),
-            average(feedRows.map((row) => row.motivation_score)),
-          ]),
-          positive_count: feedRows.filter((row) => row.sentiment === "positive").length,
-          negative_count: feedRows.filter((row) => row.sentiment === "negative").length,
-          neutral_count: feedRows.filter((row) => row.sentiment === "neutral").length,
-          average_emotional_intelligence: average(testRows.map((row) => row.emotional_intelligence_score)),
-          average_collaboration: average(testRows.map((row) => row.collaboration_index)),
-          average_stress_resilience: average(testRows.map((row) => row.stress_resilience)),
-          average_empathy: average(testRows.map((row) => row.empathy_score)),
-          feed_comments_count: feedRows.length,
-        } satisfies DepartmentIndicator;
-      });
-
-      const allFeedRows = ((feedData as Array<{ burnout_score: number | null; stress_score: number | null; motivation_score: number | null; created_at: string | null }> | null) ?? []);
-      const allTwinRows = ((twinData as Array<{ emotional_intelligence_score: number | null; collaboration_index: number | null; stress_resilience: number | null; empathy_score: number | null }> | null) ?? []);
-      const allPulseRows = ((pulseData as Array<{ stress_level: number | null; motivation_level: number | null; energy_level: number | null; pulse_date: string | null }> | null) ?? []);
-      const now = new Date();
-      const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-
-      const average = (values: Array<number | null | undefined>) => {
-        const validValues = values.filter((value): value is number => typeof value === "number");
-        return validValues.length > 0 ? validValues.reduce((sum, value) => sum + value, 0) / validValues.length : null;
-      };
-
-      const computedOrgIndicators: OrgIndicators = {
-        burnout_avg: average(allFeedRows.map((row) => row.burnout_score)),
-        stress_avg: average(allFeedRows.map((row) => row.stress_score)),
-        motivation_avg: average(allFeedRows.map((row) => row.motivation_score)),
-        energy_avg: average(allTwinRows.map((row) => row.stress_resilience)),
-        pulse_stress_avg: average(allPulseRows.map((row) => row.stress_level)),
-        pulse_motivation_avg: average(allPulseRows.map((row) => row.motivation_level)),
-        users_pulsed_today: allPulseRows.filter((row) => row.pulse_date === new Date().toISOString().slice(0, 10)).length,
-        comments_24h: allFeedRows.filter((row) => row.created_at && new Date(row.created_at) > twentyFourHoursAgo).length,
-        rotation_risk_score: average([
-          average(allFeedRows.map((row) => row.burnout_score)),
-          average(allPulseRows.map((row) => row.stress_level)),
-          average(allTwinRows.map((row) => row.stress_resilience)),
-        ]),
-      };
-
-      setOrgIndicators(computedOrgIndicators);
+      setOrgIndicators((org.data as OrgIndicators | null) ?? null);
       setDepartments(departmentRows.sort((a, b) => (b.rotation_risk_score ?? 0) - (a.rotation_risk_score ?? 0)));
-      setTrend((trendData as TrendPoint[] | null) ?? []);
-      setAlerts(((alertData?.data as AlertItem[] | null) ?? []).filter(Boolean));
+      setTrend((trendRes.data as TrendPoint[] | null) ?? []);
+      setAlerts(((alertRes.data as AlertItem[] | null) ?? []).filter(Boolean));
     } catch (err) {
       console.error("Error cargando dashboard", err);
       setError("No se pudieron cargar los indicadores desde Supabase.");
@@ -183,18 +114,12 @@ function DashboardPage() {
   useEffect(() => {
     void loadData();
 
-    const channel = supabase
-      .channel("dashboard-live")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "daily_pulse" }, () => {
-        void loadData();
-      })
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "daily_feeds" }, () => {
-        void loadData();
-      })
-      .subscribe();
+    // Realtime on daily_pulse/daily_feeds only delivers the user's own rows
+    // under RLS, so refresh the aggregates periodically instead.
+    const interval = window.setInterval(() => void loadData(), 60_000);
 
     return () => {
-      supabase.removeChannel(channel);
+      window.clearInterval(interval);
     };
   }, []);
 

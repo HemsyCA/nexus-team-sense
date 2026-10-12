@@ -159,17 +159,19 @@ function FeedPage() {
     void loadPosts();
     void loadPolls();
 
+    // daily_feeds is no longer readable by other users (anonymity), so
+    // Realtime can't announce their posts — poll the anonymous view instead.
+    const interval = window.setInterval(() => void loadPosts(), 30_000);
+
     const channel = supabase
       .channel("feed-live")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "daily_feeds" }, () => {
-        void loadPosts();
-      })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "feed_poll_votes" }, () => {
         void loadPolls();
       })
       .subscribe();
 
     return () => {
+      window.clearInterval(interval);
       supabase.removeChannel(channel);
     };
   }, []);
