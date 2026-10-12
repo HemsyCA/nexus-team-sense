@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { generateNexusReply, buildContextualPrompt, type ChatHistoryMessage } from "@/lib/nexus-ai";
+import { generateNexusReply, type ChatHistoryMessage } from "@/lib/nexus-ai";
 import { supabase } from "@/lib/supabase";
 
 export type ChatMessage = {
@@ -9,6 +9,28 @@ export type ChatMessage = {
   content: string;
   created_at?: string;
 };
+
+export type ChatSession = {
+  id: string;
+  title: string;
+  updated_at: string | null;
+};
+
+type ChatMessageRow = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  created_at: string | null;
+};
+
+function fromRows(rows: ChatMessageRow[]): ChatMessage[] {
+  return rows.map((m) => ({
+    id: m.id,
+    role: m.role,
+    content: m.content,
+    created_at: m.created_at ?? undefined,
+  }));
+}
 
 const WELCOME_MESSAGE: ChatMessage = {
   id: "welcome",
@@ -35,8 +57,7 @@ export function useNexusChat() {
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [systemPrompt, setSystemPrompt] = useState<string>("");
-  const [sessions, setSessions] = useState<any[]>([]);
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [sessionTitle, setSessionTitle] = useState<string | null>(null);
 
@@ -51,46 +72,12 @@ export function useNexusChat() {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) return;
 
-        // Perfil y datos del equipo para el system prompt
+        // Perfil para personalizar el saludo (el system prompt se arma en el servidor)
         const { data: profile } = await supabase
           .from("digital_twin_profiles")
-          .select("*")
+          .select("leadership_style, collaboration_index")
           .eq("user_id", session.user.id)
           .maybeSingle();
-
-        const today = new Date().toISOString().split("T")[0];
-        const { data: pulseData } = await supabase
-          .from("daily_pulse")
-          .select("mood")
-          .eq("pulse_date", today);
-
-        const { count: totalComentarios } = await supabase
-          .from("daily_feeds")
-          .select("*", { count: "exact", head: true });
-
-        const { count: totalPerfiles } = await supabase
-          .from("digital_twin_profiles")
-          .select("*", { count: "exact", head: true });
-
-        let climaPromedio: number | undefined;
-        if (pulseData && pulseData.length > 0) {
-          const moodValues = { good: 5, neutral: 3, bad: 1 };
-          const sum = pulseData.reduce((acc, p) =>
-            acc + (moodValues[p.mood as keyof typeof moodValues] ?? 3), 0
-          );
-          climaPromedio = Math.round((sum / pulseData.length) * 10) / 10;
-        }
-
-        const prompt = buildContextualPrompt(
-          profile,
-          {
-            climaPromedio,
-            totalComentarios: totalComentarios ?? 0,
-            totalPerfiles: totalPerfiles ?? 0,
-          }
-        );
-
-        setSystemPrompt(prompt);
 
         // Load or create latest session
         const { data: recentSessions } = await supabase
@@ -127,7 +114,7 @@ export function useNexusChat() {
             .order("created_at", { ascending: true });
 
           if (msgs && msgs.length > 0) {
-            const mapped = msgs.map((m: any) => ({ id: m.id, role: m.role, content: m.content, created_at: m.created_at } as ChatMessage));
+            const mapped = fromRows(msgs as ChatMessageRow[]);
             setMessages(mapped);
           } else {
             setMessages([WELCOME_MESSAGE]);
@@ -171,7 +158,7 @@ export function useNexusChat() {
         .order("created_at", { ascending: true });
 
       if (msgs && msgs.length > 0) {
-        const mapped = msgs.map((m: any) => ({ id: m.id, role: m.role, content: m.content, created_at: m.created_at } as ChatMessage));
+        const mapped = fromRows(msgs as ChatMessageRow[]);
         setMessages(mapped);
       } else {
         setMessages([WELCOME_MESSAGE]);
@@ -246,7 +233,6 @@ export function useNexusChat() {
       const response = await generateNexusReply(
         history,
         trimmed,
-        systemPrompt || undefined,
         (partial) => {
           if (!started) {
             started = true;
@@ -275,7 +261,7 @@ export function useNexusChat() {
       isTypingRef.current = false;
       setIsTyping(false);
     }
-  }, [activeSessionId, systemPrompt, refreshSessions, sessionTitle]);
+  }, [activeSessionId, refreshSessions, sessionTitle]);
 
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
@@ -300,8 +286,8 @@ export function useNexusChat() {
     const instruction =
       "Propón UN caso de coaching de liderazgo realista y breve (máximo 3 líneas) para que un líder lo trabaje contigo. " +
       "Usa el contexto del perfil/equipo si está disponible. Devuelve SOLO el texto del caso, sin explicaciones ni encabezados.";
-    return generateNexusReply([], instruction, systemPrompt || undefined);
-  }, [systemPrompt]);
+    return generateNexusReply([], instruction);
+  }, []);
 
   return {
     messages,

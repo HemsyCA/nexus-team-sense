@@ -1,10 +1,7 @@
 import { sendChatMessage } from "./api/chat.functions";
 
-export const NEXUS_SYSTEM_PROMPT = `Eres Nexus IA, asistente
-especializado en clima laboral, bienestar organizacional y liderazgo.
-Analizas datos de equipos y das recomendaciones a líderes sobre
-motivación, burnout, estrés y comunicación.
-Eres profesional, empático y directo. Respondes siempre en español.`;
+// Client-side wrapper over the sendChatMessage server fn. The system prompt
+// (persona + user profile + org indicators) is built on the server.
 
 export type ChatHistoryMessage = {
   role: "user" | "assistant";
@@ -57,24 +54,16 @@ async function streamChatCompletion(
 export async function generateNexusReply(
   history: ChatHistoryMessage[],
   userMessage: string,
-  customSystemPrompt?: string,
   onToken?: (partial: string) => void,
 ): Promise<string> {
   const response = await sendChatMessage({
-    data: {
-      history,
-      userMessage,
-      systemPrompt: customSystemPrompt ?? NEXUS_SYSTEM_PROMPT,
-    },
+    data: { history, userMessage },
   });
 
   return streamChatCompletion(response, onToken);
 }
 
-export async function generateContent(
-  history: ChatHistoryMessage[],
-  customSystemPrompt?: string,
-): Promise<string> {
+export async function generateContent(history: ChatHistoryMessage[]): Promise<string> {
   if (!history.length) {
     throw new Error("No hay contenido para generar la respuesta.");
   }
@@ -82,26 +71,5 @@ export async function generateContent(
   const lastMessage = history[history.length - 1];
   const previousMessages = history.slice(0, -1);
 
-  return generateNexusReply(previousMessages, lastMessage.content, customSystemPrompt);
-}
-
-export function buildContextualPrompt(profile?: any, teamStats?: any): string {
-  let prompt = NEXUS_SYSTEM_PROMPT;
-  if (profile) {
-    prompt += `\n\nPERFIL DEL USUARIO:
-- Inteligencia Emocional: ${profile.emotional_intelligence_score ?? 'N/A'}/100
-- Colaboración: ${profile.collaboration_index ?? 'N/A'}/100
-- Resiliencia al Estrés: ${profile.stress_resilience ?? 'N/A'}/100
-- Empatía: ${profile.empathy_score ?? 'N/A'}/100
-- Estilo de Liderazgo: ${profile.leadership_style ?? 'N/A'}
-- Modo de Conflicto: ${profile.conflict_mode ?? 'N/A'}
-Usa estos datos para personalizar todas tus respuestas.`;
-  }
-  if (teamStats) {
-    prompt += `\n\nDATOS DEL EQUIPO HOY:
-- Clima promedio: ${teamStats.climaPromedio ?? 'N/A'}/5
-- Comentarios activos: ${teamStats.totalComentarios ?? 0}
-- Miembros con gemelo digital: ${teamStats.totalPerfiles ?? 0}`;
-  }
-  return prompt;
+  return generateNexusReply(previousMessages, lastMessage.content);
 }

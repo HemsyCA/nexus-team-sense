@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Sparkles, ArrowRight, Play, RefreshCcw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { AppLayout, Card } from "@/components/AppLayout";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { requireAuthAndOnboarded } from "@/lib/auth-guard";
@@ -54,7 +54,6 @@ const RISK_STYLES: Record<Outcome["risk_level"], string> = {
 
 function SimPage() {
   const [decision, setDecision] = useState("Cambiar el horario de reuniones de 8:00 AM a 7:00 AM");
-  const [context, setContext] = useState<string | undefined>(undefined);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [alternatives, setAlternatives] = useState<Alternative[] | null>(null);
   const [chosen, setChosen] = useState<Alternative | null>(null);
@@ -62,23 +61,6 @@ function SimPage() {
   const [isLoadingAlternatives, setIsLoadingAlternatives] = useState(false);
   const [isLoadingOutcome, setIsLoadingOutcome] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    void (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-      const { data: profile } = await supabase
-        .from("digital_twin_profiles")
-        .select("leadership_style, collaboration_index, stress_resilience")
-        .eq("user_id", session.user.id)
-        .maybeSingle();
-      if (profile) {
-        setContext(
-          `Estilo de liderazgo: ${profile.leadership_style ?? "N/A"}. Índice de colaboración: ${profile.collaboration_index ?? "N/A"}/100. Resiliencia al estrés: ${profile.stress_resilience ?? "N/A"}/100.`,
-        );
-      }
-    })();
-  }, []);
 
   function resetSimulation() {
     setSessionId(null);
@@ -111,7 +93,7 @@ function SimPage() {
 
       await supabase.from("simulation_messages").insert([{ session_id: newSession.id, user_id: session.user.id, role: "user", content: trimmed }]);
 
-      const result = await generateAlternatives({ data: { decision: trimmed, context } });
+      const result = await generateAlternatives({ data: { decision: trimmed } });
 
       await supabase.from("simulation_messages").insert([
         { session_id: newSession.id, user_id: session.user.id, role: "assistant", content: "Alternativas propuestas por Nexus IA.", metadata: { alternatives: result.alternatives } },
@@ -141,7 +123,7 @@ function SimPage() {
         { session_id: sessionId, user_id: session.user.id, role: "user", content: `Elijo: ${alternative.title}`, metadata: { chosen_alternative_id: alternative.id } },
       ]);
 
-      const result = await simulateOutcome({ data: { decision, chosenAlternative: alternative, context } });
+      const result = await simulateOutcome({ data: { decision, chosenAlternative: alternative } });
 
       await supabase.from("simulation_outcomes").insert([
         {

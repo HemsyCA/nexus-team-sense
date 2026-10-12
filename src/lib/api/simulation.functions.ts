@@ -1,11 +1,16 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-// Server-only structured (JSON) calls to Cerebras for the decision simulator.
-// Unlike chat.functions.ts these are not streamed — the caller needs the
-// whole structured object at once to render alternatives/outcomes.
+import { requireUser } from "./auth.middleware";
+import { callCerebras } from "./cerebras.server";
+import { describeProfile, getUserProfile } from "./nexus-context.server";
 
-const CEREBRAS_MODEL = "gemma-4-31b";
+// Authenticated structured (JSON) calls to Cerebras for the decision simulator.
+// Unlike chat.functions.ts these are not streamed — the caller needs the
+// whole structured object at once to render alternatives/outcomes. Model
+// output is validated with zod so a malformed answer fails cleanly instead
+// of breaking the UI.
 
 function extractJson(text: string): unknown {
   const stripped = text
@@ -15,80 +20,94 @@ function extractJson(text: string): unknown {
   return JSON.parse(stripped);
 }
 
-async function callCerebrasJson(systemPrompt: string, userPrompt: string): Promise<unknown> {
-  const apiKey = process.env.CEREBRAS_API_KEY;
-  if (!apiKey) throw new Error("Falta CEREBRAS_API_KEY en el servidor.");
-
-  const response = await fetch("https://api.cerebras.ai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: CEREBRAS_MODEL,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      max_completion_tokens: 900,
-      temperature: 0.6,
-      top_p: 1,
-      stream: false,
-    }),
+async function callCerebrasJson<T>(
+  systemPrompt: string,
+  userPrompt: string,
+  schema: z.ZodType<T>,
+): Promise<T> {
+  const response = await callCerebras({
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+    maxTokens: 900,
+    temperature: 0.6,
+    stream: false,
   });
-
-  if (!response.ok) {
-    let message = `Error HTTP ${response.status}`;
-    try {
-      const err = await response.json();
-      message = err?.message ?? message;
-    } catch {
-      // body wasn't JSON — keep the HTTP status message
-    }
-    throw new Error(message);
-  }
 
   const data = await response.json();
   const text = data.choices?.[0]?.message?.content?.trim();
   if (!text) throw new Error("Cerebras devolvió una respuesta vacía.");
 
+  let parsed: unknown;
   try {
-    return extractJson(text);
+    parsed = extractJson(text);
   } catch {
     throw new Error("Nexus IA no devolvió un JSON válido para la simulación.");
   }
+
+  const result = schema.safeParse(parsed);
+  if (!result.success) {
+    throw new Error("Nexus IA devolvió una simulación con un formato inesperado. Inténtalo de nuevo.");
+  }
+  return result.data;
 }
 
+async function getLeaderContext(client: SupabaseClient, userId: string) {
+  const profile = await getUserProfile(client, userId);
+  return profile ? `\n\nPerfil del líder:\n${describeProfile(profile)}` : "";
+}
+
+const alternativesSchema = z.object({
+  alternatives: z
+    .array(z.object({ id: z.string(), title: z.string(), description: z.string() }))
+    .min(1),
+});
+
 const generateAlternativesInput = z.object({
-  decision: z.string().min(1),
-  context: z.string().optional(),
+  decision: z.string().trim().min(1).max(2000),
 });
 
 export const generateAlternatives = createServerFn({ method: "POST" })
+  .middleware([requireUser])
   .inputValidator(generateAlternativesInput)
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const systemPrompt = `Eres Nexus IA, asistente de liderazgo organizacional. Un líder te describe una decisión que está evaluando.
 Propón 2 o 3 alternativas de acción concretas y distintas entre sí (no triviales, con matices reales).
 Responde EXCLUSIVAMENTE con JSON válido, sin texto adicional ni markdown, con esta forma exacta:
 {"alternatives":[{"id":"a1","title":"...","description":"..."}]}
 La descripción de cada alternativa debe tener máximo 2 líneas.`;
 
-    const userPrompt = `Decisión a evaluar: ${data.decision}${data.context ? `\n\nContexto del equipo: ${data.context}` : ""}`;
+    const userPrompt = `Decisión a evaluar: ${data.decision}${await getLeaderContext(context.supabase, context.user.id)}`;
 
-    const parsed = await callCerebrasJson(systemPrompt, userPrompt);
-    return parsed as { alternatives: Array<{ id: string; title: string; description: string }> };
+    return callCerebrasJson(systemPrompt, userPrompt, alternativesSchema);
   });
 
+const metricSchema = z.object({
+  before: z.coerce.number().min(0).max(100),
+  after: z.coerce.number().min(0).max(100),
+});
+
+const outcomeSchema = z.object({
+  summary: z.string(),
+  risk_level: z.enum(["low", "medium", "high", "critical"]),
+  risk_score: z.coerce.number().min(0).max(10),
+  recommendations: z.array(z.string()),
+  projected_metrics: z.record(metricSchema),
+});
+
 const simulateOutcomeInput = z.object({
-  decision: z.string().min(1),
-  chosenAlternative: z.object({ title: z.string(), description: z.string() }),
-  context: z.string().optional(),
+  decision: z.string().trim().min(1).max(2000),
+  chosenAlternative: z.object({
+    title: z.string().max(300),
+    description: z.string().max(1000),
+  }),
 });
 
 export const simulateOutcome = createServerFn({ method: "POST" })
+  .middleware([requireUser])
   .inputValidator(simulateOutcomeInput)
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const systemPrompt = `Eres Nexus IA, asistente de liderazgo organizacional. Un líder eligió una alternativa concreta para una decisión que estaba evaluando.
 Simula el resultado probable de esa elección para su equipo.
 Responde EXCLUSIVAMENTE con JSON válido, sin texto adicional ni markdown, con esta forma exacta:
@@ -108,14 +127,7 @@ Responde EXCLUSIVAMENTE con JSON válido, sin texto adicional ni markdown, con e
 "before" son valores estimados de la situación actual del equipo; "after" es la proyección tras aplicar la alternativa elegida.`;
 
     const userPrompt = `Decisión original: ${data.decision}
-Alternativa elegida: ${data.chosenAlternative.title} — ${data.chosenAlternative.description}${data.context ? `\n\nContexto del equipo: ${data.context}` : ""}`;
+Alternativa elegida: ${data.chosenAlternative.title} — ${data.chosenAlternative.description}${await getLeaderContext(context.supabase, context.user.id)}`;
 
-    const parsed = await callCerebrasJson(systemPrompt, userPrompt);
-    return parsed as {
-      summary: string;
-      risk_level: "low" | "medium" | "high" | "critical";
-      risk_score: number;
-      recommendations: string[];
-      projected_metrics: Record<string, { before: number; after: number }>;
-    };
+    return callCerebrasJson(systemPrompt, userPrompt, outcomeSchema);
   });

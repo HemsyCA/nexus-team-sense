@@ -116,7 +116,7 @@ export function NexusChat({ className }: NexusChatProps) {
                     <div className="flex items-center justify-between">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium text-white">{(s.title || 'Nueva conversación').slice(0,40)}</p>
-                        <p className="mt-1 text-xs text-white/60">{timeAgo(s.updated_at)}</p>
+                        <p className="mt-1 text-xs text-white/60">{timeAgo(s.updated_at ?? undefined)}</p>
                       </div>
                     </div>
                   </button>
