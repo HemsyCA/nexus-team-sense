@@ -1,5 +1,5 @@
 {
-  "name": "tanstack_start_ts",
+  "name": "nexus-team-sense",
   "private": true,
   "sideEffects": false,
   "type": "module",
@@ -73,6 +73,7 @@
     "@types/node": "^22.16.5",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "@types/ws": "^8.18.2",
     "@vitejs/plugin-react": "^5.2.0",
     "eslint": "^9.32.0",
     "eslint-config-prettier": "^10.1.1",
