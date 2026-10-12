@@ -39,55 +39,43 @@ export function calculateMLQScores(answers: MLQAssessment) {
   return { transformacional, transaccional, laissez_faire };
 }
 
-export function calculateTKIMode(answers: TKIAssessment): ConflictMode {
+// Each TKI item pairs two conflict modes: answering "A" or "B" scores one of them.
+const TKI_KEY: Record<ConflictMode, Array<[index: number, answer: "A" | "B"]>> = {
+  competidor: [[1, "A"], [5, "B"], [7, "A"], [8, "B"], [9, "A"]],
+  colaborador: [[0, "B"], [2, "B"], [4, "A"], [7, "B"]],
+  comprometido: [[1, "B"], [3, "A"], [6, "B"], [9, "B"]],
+  evitador: [[0, "A"], [4, "B"], [5, "A"], [6, "A"], [8, "A"]],
+  acomodador: [[2, "A"], [3, "B"]],
+};
+
+export function calculateTKIScores(answers: TKIAssessment): Record<ConflictMode, number> {
   const normalized = answers.map((answer) => answer ?? "A");
+  const score = (mode: ConflictMode) =>
+    TKI_KEY[mode].filter(([index, answer]) => normalized[index] === answer).length;
 
-  const score = {
-    competidor:
-      (normalized[1] === "A" ? 1 : 0) +
-      (normalized[5] === "B" ? 1 : 0) +
-      (normalized[7] === "A" ? 1 : 0) +
-      (normalized[8] === "B" ? 1 : 0) +
-      (normalized[9] === "A" ? 1 : 0),
-    colaborador:
-      (normalized[0] === "B" ? 1 : 0) +
-      (normalized[2] === "B" ? 1 : 0) +
-      (normalized[4] === "A" ? 1 : 0) +
-      (normalized[7] === "B" ? 1 : 0),
-    comprometido:
-      (normalized[1] === "B" ? 1 : 0) +
-      (normalized[3] === "A" ? 1 : 0) +
-      (normalized[6] === "B" ? 1 : 0) +
-      (normalized[9] === "B" ? 1 : 0),
-    evitador:
-      (normalized[0] === "A" ? 1 : 0) +
-      (normalized[4] === "B" ? 1 : 0) +
-      (normalized[5] === "A" ? 1 : 0) +
-      (normalized[6] === "A" ? 1 : 0) +
-      (normalized[8] === "A" ? 1 : 0),
-    acomodador:
-      (normalized[2] === "A" ? 1 : 0) +
-      (normalized[3] === "B" ? 1 : 0),
+  return {
+    competidor: score("competidor"),
+    colaborador: score("colaborador"),
+    comprometido: score("comprometido"),
+    evitador: score("evitador"),
+    acomodador: score("acomodador"),
   };
+}
 
-  const ordered: [ConflictMode, number][] = [
-    ["competidor", score.competidor],
-    ["colaborador", score.colaborador],
-    ["comprometido", score.comprometido],
-    ["evitador", score.evitador],
-    ["acomodador", score.acomodador],
-  ];
+export function calculateTKIMode(answers: TKIAssessment): ConflictMode {
+  const scores = calculateTKIScores(answers);
+  const ordered = Object.entries(scores) as [ConflictMode, number][];
 
   ordered.sort((a, b) => b[1] - a[1]);
   return ordered[0][0];
 }
 
 export function getDominantLeadershipStyle(scores: ReturnType<typeof calculateMLQScores>): LeadershipStyle {
-  const values = [
+  const values: [LeadershipStyle, number][] = [
     ["transformacional", scores.transformacional],
     ["transaccional", scores.transaccional],
     ["laissez-faire", scores.laissez_faire],
-  ] as const;
+  ];
 
   values.sort((a, b) => b[1] - a[1]);
   return values[0][0];
@@ -138,33 +126,7 @@ export async function saveDigitalTwinProfile(
     raw_scores: {
       eq,
       mlq,
-      tki: {
-        competidor:
-          (tkiAnswers[1] === "A" ? 1 : 0) +
-          (tkiAnswers[5] === "B" ? 1 : 0) +
-          (tkiAnswers[7] === "A" ? 1 : 0) +
-          (tkiAnswers[8] === "B" ? 1 : 0) +
-          (tkiAnswers[9] === "A" ? 1 : 0),
-        colaborador:
-          (tkiAnswers[0] === "B" ? 1 : 0) +
-          (tkiAnswers[2] === "B" ? 1 : 0) +
-          (tkiAnswers[4] === "A" ? 1 : 0) +
-          (tkiAnswers[7] === "B" ? 1 : 0),
-        comprometido:
-          (tkiAnswers[1] === "B" ? 1 : 0) +
-          (tkiAnswers[3] === "A" ? 1 : 0) +
-          (tkiAnswers[6] === "B" ? 1 : 0) +
-          (tkiAnswers[9] === "B" ? 1 : 0),
-        evitador:
-          (tkiAnswers[0] === "A" ? 1 : 0) +
-          (tkiAnswers[4] === "B" ? 1 : 0) +
-          (tkiAnswers[5] === "A" ? 1 : 0) +
-          (tkiAnswers[6] === "A" ? 1 : 0) +
-          (tkiAnswers[8] === "A" ? 1 : 0),
-        acomodador:
-          (tkiAnswers[2] === "A" ? 1 : 0) +
-          (tkiAnswers[3] === "B" ? 1 : 0),
-      },
+      tki: calculateTKIScores(tkiAnswers),
     },
   };
 
@@ -180,7 +142,7 @@ export async function saveDigitalTwinProfile(
       collaboration_index: profile.collaboration_index,
       onboarding_completed: true,
       raw_scores: profile.raw_scores,
-    }, { onConflict: "user_id", returning: "representation" })
+    }, { onConflict: "user_id" })
     .select()
     .single();
 

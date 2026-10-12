@@ -66,7 +66,7 @@ Genera exactamente estas 3 secciones, sé directo y accionable, máximo 180 pala
       }
 
       const { data, error: profileError } = await supabase
-        .from<DigitalTwinProfile>("digital_twin_profiles")
+        .from("digital_twin_profiles")
         .select("*, raw_scores")
         .eq("user_id", userId)
         .single();
@@ -74,8 +74,8 @@ Genera exactamente estas 3 secciones, sé directo y accionable, máximo 180 pala
       if (profileError) {
         setError(profileError.message);
       } else {
-        setProfile(data);
-        void generateAIAnalysis(data);
+        setProfile(data as DigitalTwinProfile);
+        void generateAIAnalysis(data as DigitalTwinProfile);
       }
       setLoading(false);
     }

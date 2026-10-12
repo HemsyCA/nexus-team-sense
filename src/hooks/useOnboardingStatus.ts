@@ -30,7 +30,7 @@ export function useOnboardingStatus() {
       }
 
       const { data, error: profileError } = await supabase
-        .from<DigitalTwinProfile>("digital_twin_profiles")
+        .from("digital_twin_profiles")
         .select("*")
         .eq("user_id", session.user.id)
         .maybeSingle();
@@ -43,7 +43,7 @@ export function useOnboardingStatus() {
         return;
       }
 
-      setProfile(data ?? null);
+      setProfile((data as DigitalTwinProfile | null) ?? null);
       setStatus(data ? "complete" : "pending");
     }
 
