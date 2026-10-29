@@ -36,6 +36,7 @@
   --color-popover-foreground: var(--popover-foreground);
 
   --color-brand-navy: var(--brand-navy);
+  --color-brand-panel: var(--brand-panel);
   --color-brand-blue: var(--brand-blue);
   --color-brand-purple: var(--brand-purple);
   --color-brand-emerald: var(--brand-emerald);
@@ -76,6 +77,30 @@
   --brand-bg: oklch(0.985 0.005 240);        /* #f8fafc */
   --brand-amber: oklch(0.78 0.16 60);        /* warning */
   --brand-red: oklch(0.64 0.22 25);          /* alert */
+  /* Large dark surfaces (sidebar, hero panels): stay dark in both themes */
+  --brand-panel: var(--brand-navy);
+}
+
+.dark {
+  --background: oklch(0.16 0.02 265);
+  --foreground: oklch(0.95 0.01 250);
+  --card: oklch(0.205 0.025 265);
+  --card-foreground: oklch(0.95 0.01 250);
+  --muted: oklch(0.255 0.025 265);
+  --muted-foreground: oklch(0.72 0.02 255);
+  --border: oklch(0.3 0.025 265);
+  --input: oklch(0.33 0.025 265);
+  --ring: oklch(0.72 0.15 230);
+
+  --primary-foreground: oklch(0.98 0.005 240);
+  --accent: oklch(0.28 0.03 265);
+  --destructive-foreground: oklch(0.98 0.005 240);
+
+  /* In dark mode "navy" is used for buttons and links, so it becomes a
+     lighter indigo that stays readable on dark surfaces. */
+  --brand-navy: oklch(0.58 0.16 270);
+  --brand-bg: oklch(0.16 0.02 265);
+  --brand-panel: oklch(0.12 0.03 265);
 }
 
 @layer base {
@@ -92,5 +117,6 @@
   body {
     background-color: var(--color-brand-bg);
     color: var(--color-foreground);
+    transition: background-color 0.2s ease, color 0.2s ease;
   }
 }

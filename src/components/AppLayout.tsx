@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { signOut } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { getInitials } from "@/lib/utils";
@@ -60,10 +61,10 @@ export function AppLayout({
   return (
     <div className="min-h-screen bg-brand-bg text-foreground">
       {/* Desktop sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 flex-col bg-brand-navy text-white lg:flex">
+      <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 flex-col border-r border-transparent bg-brand-panel text-white dark:border-border lg:flex">
         <div className="flex flex-1 flex-col p-6">
           <Link to="/home" className="mb-10 flex items-center gap-2">
-            <div className="grid size-9 place-items-center rounded-xl bg-brand-blue font-bold text-brand-navy shadow-lg shadow-brand-blue/20">
+            <div className="grid size-9 place-items-center rounded-xl bg-brand-blue font-bold text-slate-900 shadow-lg shadow-brand-blue/20">
               N
             </div>
             <div className="leading-tight">
@@ -130,7 +131,8 @@ export function AppLayout({
               <span className="size-1.5 rounded-full bg-brand-purple" />
               Nexus IA Online
             </div>
-            <button className="grid size-10 place-items-center rounded-full border border-border bg-card text-muted-foreground transition hover:text-foreground">
+            <ThemeToggle />
+            <button className="hidden size-10 place-items-center rounded-full border border-border bg-card text-muted-foreground transition hover:text-foreground sm:grid">
               <Bell className="size-4" />
             </button>
             <button
@@ -148,7 +150,7 @@ export function AppLayout({
             <Link
               to="/perfil"
               title="Mi perfil"
-              className="grid size-10 place-items-center rounded-full bg-gradient-to-br from-brand-blue to-brand-purple text-sm font-bold text-white outline-2 outline-white transition hover:opacity-90"
+              className="grid size-10 place-items-center rounded-full bg-gradient-to-br from-brand-blue to-brand-purple text-sm font-bold text-white transition hover:opacity-90"
             >
               {initials}
             </Link>

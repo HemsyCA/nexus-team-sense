@@ -259,7 +259,7 @@ function SimPage() {
             })}
           </ul>
 
-          <div className="mt-8 rounded-2xl bg-brand-navy p-5 text-white">
+          <div className="mt-8 rounded-2xl bg-brand-panel p-5 text-white">
             <div className="flex items-start gap-3">
               <div className="grid size-9 shrink-0 place-items-center rounded-lg bg-brand-purple/20 text-brand-purple">
                 <Sparkles className="size-4" />
@@ -281,7 +281,7 @@ function SimPage() {
                 )}
                 <button
                   onClick={resetSimulation}
-                  className="mt-4 inline-flex items-center gap-2 rounded-lg bg-brand-blue px-4 py-2 text-xs font-bold text-brand-navy transition hover:bg-brand-blue/90"
+                  className="mt-4 inline-flex items-center gap-2 rounded-lg bg-brand-blue px-4 py-2 text-xs font-bold text-slate-900 transition hover:bg-brand-blue/90"
                 >
                   Simular otra decisión
                   <ArrowRight className="size-3" />

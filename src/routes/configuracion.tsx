@@ -30,7 +30,7 @@ function PrivacyPage() {
       subtitle="Así protegemos tu identidad y tus respuestas"
     >
       {/* Hero explanation */}
-      <Card className="mb-6 overflow-hidden bg-brand-navy text-white">
+      <Card className="mb-6 overflow-hidden">
         <div className="grid grid-cols-1 items-center gap-6 lg:grid-cols-[auto_minmax(0,1fr)]">
           <div className="grid size-16 shrink-0 place-items-center rounded-2xl bg-brand-blue/15 text-brand-blue">
             <ShieldCheck className="size-7" />
@@ -39,7 +39,7 @@ function PrivacyPage() {
             <p className="text-[11px] font-bold uppercase tracking-wider text-brand-blue">
               Promesa de Anonimato
             </p>
-            <h2 className="mt-2 text-xl font-bold text-black">
+            <h2 className="mt-2 text-xl font-bold text-foreground">
               Los comentarios son visibles para el líder solo mediante códigos
               anónimos. La identidad real no se muestra en el feed ni en el
               dashboard.

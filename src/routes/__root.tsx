@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
   Link,
+  useRouterState,
   type ErrorComponentProps,
   createRootRouteWithContext,
   useRouter,
@@ -12,6 +13,8 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { ThemeToggle } from "../components/ThemeToggle";
+import { THEME_INIT_SCRIPT } from "../lib/theme";
 
 function NotFoundComponent() {
   return (
@@ -112,8 +115,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="es">
+    <html lang="es" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <HeadContent />
       </head>
       <body>
@@ -131,6 +135,16 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
+      <FloatingThemeToggle />
     </QueryClientProvider>
   );
+}
+
+// Pages inside AppLayout (and the chat) already show the toggle in their header.
+const APP_SHELL_PATHS = ["/home", "/feed", "/chat", "/dashboard", "/simulaciones", "/configuracion", "/perfil"];
+
+function FloatingThemeToggle() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  if (APP_SHELL_PATHS.includes(pathname)) return null;
+  return <ThemeToggle className="fixed right-4 top-4 z-50 shadow-sm" />;
 }

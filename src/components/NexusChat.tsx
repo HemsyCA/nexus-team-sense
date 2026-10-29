@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { useNexusChat, type ChatMessage } from "@/hooks/useNexusChat";
 import { cn } from "@/lib/utils";
 
@@ -278,7 +279,7 @@ export function NexusChat({ className }: NexusChatProps) {
         </div>
       ) : null}
 
-      <div className="relative flex min-w-0 flex-1 flex-col bg-gradient-to-b from-card to-brand-bg">
+      <div className="relative flex min-w-0 flex-1 flex-col bg-gradient-to-b from-card to-brand-bg dark:from-brand-bg dark:to-brand-bg">
         {/* Encabezado */}
         <header className="flex items-center justify-between gap-3 border-b border-border/60 bg-card/80 px-4 py-3 backdrop-blur">
           <div className="flex min-w-0 items-center gap-2">
@@ -295,6 +296,7 @@ export function NexusChat({ className }: NexusChatProps) {
             </div>
           </div>
           <div className="flex items-center gap-1 lg:hidden">
+            <ThemeToggle className="size-8 border-0 bg-transparent" />
             <button type="button" onClick={() => setShowHistory(true)} aria-label="Ver historial" className="rounded-full p-2 text-muted-foreground hover:bg-muted">
               <History className="size-4" />
             </button>

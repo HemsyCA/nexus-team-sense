@@ -122,7 +122,7 @@ function LoginPage() {
   return (
     <div className="grid min-h-screen bg-brand-bg text-foreground lg:grid-cols-[1.1fr_1fr]">
       {/* Panel institucional */}
-      <aside className="relative hidden flex-col justify-between overflow-hidden bg-brand-navy p-14 text-white lg:flex">
+      <aside className="relative hidden flex-col justify-between overflow-hidden bg-brand-panel p-14 text-white lg:flex">
         <div
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 opacity-[0.06]"

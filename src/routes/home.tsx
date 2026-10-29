@@ -166,18 +166,18 @@ function HomePage() {
         </Card>
 
         {/* Nexus IA CTA */}
-        <Card className="overflow-hidden bg-brand-navy text-white lg:col-span-5">
+        <Card className="overflow-hidden lg:col-span-5">
           <div className="flex items-center gap-3">
             <div className="grid size-10 place-items-center rounded-xl bg-brand-purple/20 text-brand-purple">
               <Sparkles className="size-5" />
             </div>
             <div>
-              <p className="text-sm font-bold text-black">Nexus IA</p>
+              <p className="text-sm font-bold text-foreground">Nexus IA</p>
               <p className="text-[11px] text-brand-blue/100">Coaching predictivo</p>
             </div>
           </div>
 
-          <p className="mt-6 text-sm leading-relaxed text-brand-navy/100">
+          <p className="mt-6 text-sm leading-relaxed text-foreground">
             Hoy detecté un patrón de fatiga en Operaciones vinculado a las reuniones
             tempranas. ¿Te muestro una simulación de horario alternativo?
           </p>
@@ -185,14 +185,14 @@ function HomePage() {
           <div className="mt-6 flex flex-col gap-2">
             <Link
               to="/chat"
-              className="flex items-center justify-between rounded-xl bg-brand-blue px-4 py-3 text-sm font-semibold text-brand-navy transition hover:bg-brand-blue/90"
+              className="flex items-center justify-between rounded-xl bg-brand-blue px-4 py-3 text-sm font-semibold text-slate-900 transition hover:bg-brand-blue/90"
             >
               Conversar con Nexus IA
               <ArrowRight className="size-4" />
             </Link>
             <Link
               to="/simulaciones"
-              className="flex items-center justify-between rounded-xl bg-brand-blue px-4 py-3 text-sm font-semibold text-brand-navy transition hover:bg-brand-blue/90"
+              className="flex items-center justify-between rounded-xl bg-brand-blue px-4 py-3 text-sm font-semibold text-slate-900 transition hover:bg-brand-blue/90"
             >
               Ejecutar simulación
               <ArrowRight className="size-4" />

@@ -71,7 +71,7 @@ function RegisterPage() {
   }
 
   return (
-    <div className="relative grid min-h-screen bg-brand-navy text-white lg:grid-cols-2">
+    <div className="relative grid min-h-screen bg-brand-panel text-white lg:grid-cols-2">
       <div className="relative hidden flex-col justify-between overflow-hidden p-12 lg:flex">
         <div
           className="pointer-events-none absolute -left-32 top-1/2 size-[600px] -translate-y-1/2 rounded-full opacity-30 blur-3xl"
@@ -89,7 +89,7 @@ function RegisterPage() {
         />
 
         <div className="relative flex items-center gap-3">
-          <div className="grid size-11 place-items-center rounded-xl bg-brand-blue font-bold text-brand-navy shadow-lg shadow-brand-blue/30">
+          <div className="grid size-11 place-items-center rounded-xl bg-brand-blue font-bold text-slate-900 shadow-lg shadow-brand-blue/30">
             N
           </div>
           <div className="leading-tight">
