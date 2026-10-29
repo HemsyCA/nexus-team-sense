@@ -23,7 +23,7 @@ const sendChatMessageInput = z.object({
 
 export const sendChatMessage = createServerFn({ method: "POST" })
   .middleware([requireUser])
-  .inputValidator(sendChatMessageInput)
+  .validator(sendChatMessageInput)
   .handler(async ({ data, context }) => {
     const systemPrompt = await buildContextualPrompt(context.supabase, context.user.id);
 

@@ -70,7 +70,7 @@ const generateAlternativesInput = z.object({
 
 export const generateAlternatives = createServerFn({ method: "POST" })
   .middleware([requireUser])
-  .inputValidator(generateAlternativesInput)
+  .validator(generateAlternativesInput)
   .handler(async ({ data, context }) => {
     const systemPrompt = `Eres Nexus IA, asistente de liderazgo organizacional. Un líder te describe una decisión que está evaluando.
 Propón 2 o 3 alternativas de acción concretas y distintas entre sí (no triviales, con matices reales).
@@ -106,7 +106,7 @@ const simulateOutcomeInput = z.object({
 
 export const simulateOutcome = createServerFn({ method: "POST" })
   .middleware([requireUser])
-  .inputValidator(simulateOutcomeInput)
+  .validator(simulateOutcomeInput)
   .handler(async ({ data, context }) => {
     const systemPrompt = `Eres Nexus IA, asistente de liderazgo organizacional. Un líder eligió una alternativa concreta para una decisión que estaba evaluando.
 Simula el resultado probable de esa elección para su equipo.
