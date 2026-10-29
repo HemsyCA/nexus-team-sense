@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ChevronDown, Lock, MessageSquare, Send, ShieldCheck } from "lucide-react";
+import { HandHeart, Lock, MessageSquare, Send, ShieldCheck, ThumbsUp, UserRound } from "lucide-react";
 import { AppLayout, Card } from "@/components/AppLayout";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { requireAuthAndOnboarded } from "@/lib/auth-guard";
@@ -27,20 +27,17 @@ export const Route = createFileRoute("/feed")({
 
 type FeedPost = {
   id: string;
-  anonymous_code: string | null;
   department_name: string | null;
-  department_code: string | null;
   created_at: string | null;
   content: string;
   sentiment: string | null;
-  burnout_score: number | null;
-  stress_score: number | null;
-  motivation_score: number | null;
-  ai_tags: unknown;
 };
 
 type PollOption = { id: string; label: string; position: number; votes: number };
 type Poll = { id: string; question: string; options: PollOption[]; myVoteOptionId: string | null };
+
+type ReactionType = "support" | "relate";
+type ReactionState = Record<string, { counts: Record<ReactionType, number>; mine: ReactionType[] }>;
 
 const ALL_AREAS = "__all__";
 const MAX_LENGTH = 1000;
@@ -54,54 +51,114 @@ const TONE_FILTERS = [
 
 type ToneFilter = (typeof TONE_FILTERS)[number]["value"];
 
+const REACTIONS: Array<{ type: ReactionType; label: string; icon: typeof ThumbsUp }> = [
+  { type: "support", label: "Apoyo", icon: ThumbsUp },
+  { type: "relate", label: "Me identifico", icon: HandHeart },
+];
+
 function FeedPage() {
   const [areaFilter, setAreaFilter] = useState<string>(ALL_AREAS);
   const [toneFilter, setToneFilter] = useState<ToneFilter>("all");
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [areas, setAreas] = useState<string[]>([]);
   const [polls, setPolls] = useState<Poll[]>([]);
+  const [reactions, setReactions] = useState<ReactionState>({});
+  const [reactionsEnabled, setReactionsEnabled] = useState(true);
+  const [myArea, setMyArea] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [isPosting, setIsPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  async function getUserId() {
+    const { data } = await supabase.auth.getSession();
+    return data.session?.user.id ?? null;
+  }
+
   async function loadPosts() {
     const { data: feedData, error: feedError } = await supabase
       .from("feed_enriched")
-      .select("*")
+      .select("id, department_name, created_at, content, sentiment")
       .order("created_at", { ascending: false });
 
     if (feedError) {
       console.error("Error cargando feed", feedError);
-      setError(`No se pudieron cargar los comentarios desde Supabase: ${feedError.message}`);
+      setError("No se pudieron cargar las publicaciones. Inténtalo de nuevo en unos minutos.");
       return;
     }
 
-    const normalizedPosts = ((feedData as Array<Record<string, unknown>> | null) ?? []).map((row) => ({
+    const normalizedPosts = ((feedData as FeedPost[] | null) ?? []).map((row) => ({
+      ...row,
       id: String(row.id),
-      anonymous_code: row.anonymous_code as string | null,
-      department_name: row.department_name as string | null,
-      department_code: row.department_code as string | null,
-      created_at: row.created_at as string | null,
       content: String(row.content ?? ""),
-      sentiment: row.sentiment as string | null,
-      burnout_score: row.burnout_score as number | null,
-      stress_score: row.stress_score as number | null,
-      motivation_score: row.motivation_score as number | null,
-      ai_tags: row.ai_tags,
     }));
 
-    const availableAreas = Array.from(
-      new Set(normalizedPosts.map((post) => post.department_name).filter(Boolean) as string[]),
-    ).sort();
-
     setPosts(normalizedPosts);
-    setAreas(availableAreas);
+    setAreas(
+      Array.from(new Set(normalizedPosts.map((post) => post.department_name).filter(Boolean) as string[])).sort(),
+    );
     setError(null);
   }
 
+  // Reactions live in feed_reactions (see supabase-feed-reactions.sql). Only
+  // aggregated counts are readable by others; if the table isn't installed
+  // yet the reaction bar is simply hidden.
+  async function loadReactions() {
+    const userId = await getUserId();
+    const [countsResult, mineResult] = await Promise.all([
+      supabase.from("feed_reaction_counts").select("feed_id, reaction, votes"),
+      userId
+        ? supabase.from("feed_reactions").select("feed_id, reaction").eq("user_id", userId)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+
+    if (countsResult.error || mineResult.error) {
+      setReactionsEnabled(false);
+      return;
+    }
+
+    const next: ReactionState = {};
+    const entry = (feedId: string) =>
+      (next[feedId] ??= { counts: { support: 0, relate: 0 }, mine: [] });
+
+    ((countsResult.data as Array<{ feed_id: string; reaction: ReactionType; votes: number }> | null) ?? []).forEach(
+      (row) => {
+        entry(row.feed_id).counts[row.reaction] = Number(row.votes);
+      },
+    );
+    ((mineResult.data as Array<{ feed_id: string; reaction: ReactionType }> | null) ?? []).forEach((row) => {
+      entry(row.feed_id).mine.push(row.reaction);
+    });
+
+    setReactions(next);
+    setReactionsEnabled(true);
+  }
+
+  async function toggleReaction(feedId: string, type: ReactionType) {
+    const userId = await getUserId();
+    if (!userId) return;
+
+    const current = reactions[feedId] ?? { counts: { support: 0, relate: 0 }, mine: [] };
+    const isActive = current.mine.includes(type);
+
+    // Optimistic update; reload from the server afterwards.
+    setReactions((prev) => ({
+      ...prev,
+      [feedId]: {
+        counts: { ...current.counts, [type]: Math.max(0, current.counts[type] + (isActive ? -1 : 1)) },
+        mine: isActive ? current.mine.filter((r) => r !== type) : [...current.mine, type],
+      },
+    }));
+
+    const { error: reactionError } = isActive
+      ? await supabase.from("feed_reactions").delete().match({ feed_id: feedId, user_id: userId, reaction: type })
+      : await supabase.from("feed_reactions").insert({ feed_id: feedId, user_id: userId, reaction: type });
+
+    if (reactionError) console.error("Error registrando reacción", reactionError);
+    await loadReactions();
+  }
+
   async function loadPolls() {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const userId = sessionData.session?.user.id;
+    const userId = await getUserId();
 
     const [{ data: pollsData }, { data: optionsData }, { data: resultsData }, myVotesResult] = await Promise.all([
       supabase.from("feed_polls").select("id, question").order("created_at", { ascending: false }),
@@ -131,19 +188,18 @@ function FeedPage() {
       },
     );
 
-    const assembledPolls = ((pollsData as Array<{ id: string; question: string }> | null) ?? []).map((poll) => ({
-      id: poll.id,
-      question: poll.question,
-      options: optionsByPoll.get(poll.id) ?? [],
-      myVoteOptionId: myVoteByPoll.get(poll.id) ?? null,
-    }));
-
-    setPolls(assembledPolls);
+    setPolls(
+      ((pollsData as Array<{ id: string; question: string }> | null) ?? []).map((poll) => ({
+        id: poll.id,
+        question: poll.question,
+        options: optionsByPoll.get(poll.id) ?? [],
+        myVoteOptionId: myVoteByPoll.get(poll.id) ?? null,
+      })),
+    );
   }
 
   async function handleVote(pollId: string, optionId: string) {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const userId = sessionData.session?.user.id;
+    const userId = await getUserId();
     if (!userId) return;
 
     const { error: voteError } = await supabase
@@ -158,13 +214,31 @@ function FeedPage() {
     await loadPolls();
   }
 
+  async function getMyDepartmentId(userId: string) {
+    const { data } = await supabase.from("profiles").select("department_id").eq("user_id", userId).maybeSingle();
+    return (data?.department_id as string | null | undefined) ?? null;
+  }
+
   useEffect(() => {
     void loadPosts();
     void loadPolls();
+    void loadReactions();
+
+    void (async () => {
+      const userId = await getUserId();
+      if (!userId) return;
+      const departmentId = await getMyDepartmentId(userId);
+      if (!departmentId) return;
+      const { data } = await supabase.from("departments").select("name").eq("id", departmentId).maybeSingle();
+      setMyArea((data?.name as string | undefined) ?? null);
+    })();
 
     // daily_feeds is no longer readable by other users (anonymity), so
     // Realtime can't announce their posts — poll the anonymous view instead.
-    const interval = window.setInterval(() => void loadPosts(), 30_000);
+    const interval = window.setInterval(() => {
+      void loadPosts();
+      void loadReactions();
+    }, 30_000);
 
     const channel = supabase
       .channel("feed-live")
@@ -187,18 +261,8 @@ function FeedPage() {
     setError(null);
 
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const userId = sessionData.session?.user.id;
-
-      let departmentId: string | null = null;
-      if (userId) {
-        const { data: myProfile } = await supabase
-          .from("profiles")
-          .select("department_id")
-          .eq("user_id", userId)
-          .maybeSingle();
-        departmentId = myProfile?.department_id ?? null;
-      }
+      const userId = await getUserId();
+      const departmentId = userId ? await getMyDepartmentId(userId) : null;
 
       const lowerText = trimmed.toLowerCase();
       let sentiment: "positive" | "neutral" | "negative" = "neutral";
@@ -230,15 +294,13 @@ function FeedPage() {
         ai_tags: [sentiment === "negative" ? "sobrecarga" : "reconocimiento"],
       });
 
-      if (insertError) {
-        throw insertError;
-      }
+      if (insertError) throw insertError;
 
       setDraft("");
       await loadPosts();
     } catch (err) {
       console.error("Error publicando feed", err);
-      setError("No se pudo guardar el comentario en Supabase.");
+      setError("No se pudo publicar tu comentario. Inténtalo de nuevo.");
     } finally {
       setIsPosting(false);
     }
@@ -252,115 +314,127 @@ function FeedPage() {
   const hasFilters = areaFilter !== ALL_AREAS || toneFilter !== "all";
 
   return (
-    <AppLayout
-      title="Feed de opinión"
-      subtitle="Comentarios anónimos del equipo sobre su experiencia laboral"
-    >
+    <AppLayout title="Feed de opinión" subtitle="La voz del equipo, de forma anónima y respetuosa">
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        <section className="lg:col-span-8">
-          <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm shadow-slate-900/[0.02]">
-            {/* Encabezado + filtros */}
-            <div className="flex flex-col gap-3 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-sm font-semibold">Comentarios recientes</h2>
-                <p className="text-xs text-muted-foreground">
-                  {filteredPosts.length} {filteredPosts.length === 1 ? "comentario" : "comentarios"}
-                  {hasFilters ? " con los filtros aplicados" : ""}
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <FilterSelect
-                  label="Área"
-                  value={areaFilter}
-                  onChange={setAreaFilter}
-                  options={[
-                    { value: ALL_AREAS, label: "Todas las áreas" },
-                    ...areas.map((area) => ({ value: area, label: area })),
-                  ]}
+        <section className="space-y-4 lg:col-span-8">
+          {/* Publicar */}
+          <Card className="p-5">
+            <div className="flex gap-3">
+              <AnonymousAvatar />
+              <div className="min-w-0 flex-1">
+                <textarea
+                  aria-label="Escribe una publicación anónima"
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value.slice(0, MAX_LENGTH))}
+                  className="w-full resize-none rounded-lg border border-input bg-muted/30 px-4 py-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-brand-navy focus:bg-card focus:ring-2 focus:ring-brand-navy/10"
+                  rows={draft ? 4 : 2}
+                  placeholder="¿Qué quieres compartir con tu equipo hoy?"
                 />
-                <FilterSelect
-                  label="Tono"
-                  value={toneFilter}
-                  onChange={(value) => setToneFilter(value as ToneFilter)}
-                  options={TONE_FILTERS}
-                />
-              </div>
-            </div>
-
-            {/* Redacción */}
-            <div className="border-b border-border bg-muted/30 px-5 py-4">
-              <label htmlFor="feed-draft" className="text-xs font-medium text-foreground">
-                Nuevo comentario anónimo
-              </label>
-              <textarea
-                id="feed-draft"
-                value={draft}
-                onChange={(event) => setDraft(event.target.value.slice(0, MAX_LENGTH))}
-                className="mt-2 w-full resize-none rounded-md border border-input bg-card px-3 py-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-brand-navy focus:ring-2 focus:ring-brand-navy/10"
-                rows={3}
-                placeholder="¿Cómo fue tu jornada? Comparte lo que funciona y lo que se puede mejorar."
-              />
-              <div className="mt-2 flex items-center justify-between gap-3">
-                <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                  <Lock className="size-3 shrink-0" />
-                  Tu nombre no se muestra. Solo se publica el área y la fecha.
-                </p>
-                <div className="flex shrink-0 items-center gap-3">
-                  <span className="hidden text-[11px] tabular-nums text-muted-foreground sm:inline">
-                    {draft.length}/{MAX_LENGTH}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => void handlePublish()}
-                    disabled={isPosting || !draft.trim()}
-                    className="inline-flex items-center gap-2 rounded-md bg-brand-navy px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-navy/90 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <Send className="size-3.5" />
-                    {isPosting ? "Enviando…" : "Enviar"}
-                  </button>
+                <div className="mt-3 flex items-center justify-between gap-3">
+                  <p className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                    <Lock className="size-3 shrink-0" />
+                    <span className="truncate">
+                      Publicarás como <strong className="font-medium text-foreground">Colaborador anónimo</strong>
+                      {myArea ? ` · ${myArea}` : ""}
+                    </span>
+                  </p>
+                  <div className="flex shrink-0 items-center gap-3">
+                    {draft ? (
+                      <span className="hidden text-[11px] tabular-nums text-muted-foreground sm:inline">
+                        {draft.length}/{MAX_LENGTH}
+                      </span>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => void handlePublish()}
+                      disabled={isPosting || !draft.trim()}
+                      className="inline-flex items-center gap-2 rounded-full bg-brand-navy px-5 py-2 text-sm font-medium text-white transition hover:bg-brand-navy/90 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <Send className="size-3.5" />
+                      {isPosting ? "Publicando…" : "Publicar"}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
+          </Card>
 
-            {error ? (
-              <div className="border-b border-brand-red/20 bg-brand-red/5 px-5 py-3 text-sm text-brand-red">
-                {error}
-              </div>
-            ) : null}
-
-            {/* Listado */}
-            {filteredPosts.length > 0 ? (
-              <ul className="divide-y divide-border">
-                {filteredPosts.map((post) => (
-                  <PostRow key={post.id} post={post} />
-                ))}
-              </ul>
-            ) : (
-              <div className="px-5 py-12 text-center">
-                <MessageSquare className="mx-auto size-6 text-muted-foreground/60" />
-                <p className="mt-3 text-sm font-medium">
-                  {hasFilters ? "Sin resultados" : "Aún no hay comentarios"}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {hasFilters
-                    ? "No hay comentarios que coincidan con los filtros seleccionados."
-                    : "Sé la primera persona en compartir cómo va tu semana."}
-                </p>
-                {hasFilters ? (
+          {/* Filtros */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+              {[ALL_AREAS, ...areas].map((area) => {
+                const isActive = area === areaFilter;
+                return (
                   <button
+                    key={area}
                     type="button"
-                    onClick={() => {
-                      setAreaFilter(ALL_AREAS);
-                      setToneFilter("all");
-                    }}
-                    className="mt-4 text-xs font-medium text-brand-navy underline-offset-4 hover:underline"
+                    onClick={() => setAreaFilter(area)}
+                    className={cn(
+                      "shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-medium transition",
+                      isActive
+                        ? "border-brand-navy bg-brand-navy text-white"
+                        : "border-border bg-card text-muted-foreground hover:border-brand-navy/40 hover:text-foreground",
+                    )}
                   >
-                    Limpiar filtros
+                    {area === ALL_AREAS ? "Todas las áreas" : area}
                   </button>
-                ) : null}
-              </div>
-            )}
+                );
+              })}
+            </div>
+            <select
+              aria-label="Filtrar por tono"
+              value={toneFilter}
+              onChange={(event) => setToneFilter(event.target.value as ToneFilter)}
+              className="h-8 shrink-0 rounded-full border border-border bg-card px-3 text-xs font-medium text-foreground outline-none focus:border-brand-navy"
+            >
+              {TONE_FILTERS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </div>
+
+          {error ? (
+            <div className="rounded-xl border border-brand-red/30 bg-brand-red/5 px-4 py-3 text-sm text-brand-red">
+              {error}
+            </div>
+          ) : null}
+
+          {/* Publicaciones */}
+          {filteredPosts.length > 0 ? (
+            filteredPosts.map((post) => (
+              <PostCard
+                key={post.id}
+                post={post}
+                reactions={reactionsEnabled ? reactions[post.id] : undefined}
+                showReactions={reactionsEnabled}
+                onReact={(type) => void toggleReaction(post.id, type)}
+              />
+            ))
+          ) : (
+            <Card className="py-12 text-center">
+              <MessageSquare className="mx-auto size-6 text-muted-foreground/60" />
+              <p className="mt-3 text-sm font-medium">{hasFilters ? "Sin resultados" : "Aún no hay publicaciones"}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {hasFilters
+                  ? "No hay publicaciones que coincidan con los filtros seleccionados."
+                  : "Sé la primera persona en compartir cómo va tu semana."}
+              </p>
+              {hasFilters ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAreaFilter(ALL_AREAS);
+                    setToneFilter("all");
+                  }}
+                  className="mt-4 text-xs font-medium text-brand-navy underline-offset-4 hover:underline"
+                >
+                  Limpiar filtros
+                </button>
+              ) : null}
+            </Card>
+          )}
         </section>
 
         {/* Lateral */}
@@ -375,12 +449,12 @@ function FeedPage() {
           <div className="rounded-2xl border border-border bg-muted/40 p-5">
             <div className="flex items-center gap-2 text-sm font-semibold">
               <ShieldCheck className="size-4 text-brand-emerald" />
-              Política de confidencialidad
+              Normas de la comunidad
             </div>
             <ul className="mt-3 space-y-2 text-xs leading-relaxed text-muted-foreground">
-              <li>· Los comentarios no muestran nombre ni correo.</li>
-              <li>· Los líderes solo ven indicadores agregados por área.</li>
-              <li>· Las áreas con menos de 3 personas no se reportan por separado.</li>
+              <li>· Las publicaciones no muestran nombre ni correo.</li>
+              <li>· Las reacciones son anónimas; solo se ven los totales.</li>
+              <li>· Comenta situaciones, no personas. Mantén un tono respetuoso.</li>
             </ul>
           </div>
         </aside>
@@ -389,80 +463,147 @@ function FeedPage() {
   );
 }
 
-const TONE_META: Record<string, { label: string; dot: string; text: string; bar: string }> = {
-  positive: { label: "Positivo", dot: "bg-brand-emerald", text: "text-brand-emerald", bar: "bg-brand-emerald" },
-  neutral: { label: "Neutral", dot: "bg-slate-400", text: "text-muted-foreground", bar: "bg-slate-300" },
-  negative: { label: "Negativo", dot: "bg-brand-red", text: "text-brand-red", bar: "bg-brand-red" },
+const TONE_META: Record<string, { label: string; dot: string; badge: string; bar: string }> = {
+  positive: {
+    label: "Positivo",
+    dot: "bg-brand-emerald",
+    badge: "bg-brand-emerald/10 text-brand-emerald",
+    bar: "bg-brand-emerald",
+  },
+  neutral: { label: "Neutral", dot: "bg-slate-400", badge: "bg-muted text-muted-foreground", bar: "bg-slate-300" },
+  negative: { label: "Negativo", dot: "bg-brand-red", badge: "bg-brand-red/10 text-brand-red", bar: "bg-brand-red" },
 };
+
+const AVATAR_COLORS = [
+  "bg-brand-navy text-white",
+  "bg-sky-100 text-sky-800",
+  "bg-emerald-100 text-emerald-800",
+  "bg-amber-100 text-amber-800",
+  "bg-violet-100 text-violet-800",
+  "bg-slate-200 text-slate-700",
+];
 
 function toneOf(sentiment: string | null) {
   return TONE_META[sentiment ?? "neutral"] ?? TONE_META.neutral;
 }
 
-function formatDate(value: string | null) {
-  if (!value) return "Ahora";
-  return new Date(value).toLocaleString("es-ES", {
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+function areaInitials(area: string | null) {
+  if (!area) return "G";
+  return area
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
+function areaColor(area: string | null) {
+  const key = area ?? "General";
+  let hash = 0;
+  for (const char of key) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+}
+
+function timeAgo(value: string | null) {
+  if (!value) return "ahora";
+  const minutes = Math.floor((Date.now() - new Date(value).getTime()) / 60_000);
+  if (minutes < 1) return "ahora";
+  if (minutes < 60) return `hace ${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `hace ${hours} h`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return days === 1 ? "ayer" : `hace ${days} días`;
+  return new Date(value).toLocaleDateString("es-ES", { day: "numeric", month: "short" });
 }
 
 function isWithinDays(value: string | null, days: number) {
   return value !== null && Date.now() - new Date(value).getTime() <= days * 24 * 60 * 60 * 1000;
 }
 
-function FilterSelect({
-  label,
-  value,
-  onChange,
-  options,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  options: ReadonlyArray<{ value: string; label: string }>;
-}) {
+function AnonymousAvatar() {
   return (
-    <label className="relative">
-      <span className="sr-only">{label}</span>
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="h-9 appearance-none rounded-md border border-input bg-card pl-3 pr-8 text-xs font-medium text-foreground outline-none transition focus:border-brand-navy focus:ring-2 focus:ring-brand-navy/10"
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-    </label>
+    <div className="grid size-10 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground">
+      <UserRound className="size-5" />
+    </div>
   );
 }
 
-function PostRow({ post }: { post: FeedPost }) {
+function PostCard({
+  post,
+  reactions,
+  showReactions,
+  onReact,
+}: {
+  post: FeedPost;
+  reactions?: { counts: Record<ReactionType, number>; mine: ReactionType[] };
+  showReactions: boolean;
+  onReact: (type: ReactionType) => void;
+}) {
   const tone = toneOf(post.sentiment);
+  const totalReactions = (reactions?.counts.support ?? 0) + (reactions?.counts.relate ?? 0);
 
   return (
-    <li className="px-5 py-4 transition hover:bg-muted/30">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-          <span className="truncate font-medium text-foreground">{post.department_name ?? "General"}</span>
-          <span aria-hidden="true">·</span>
-          <time className="shrink-0" dateTime={post.created_at ?? undefined}>
-            {formatDate(post.created_at)}
-          </time>
-        </div>
-        <span className={cn("inline-flex shrink-0 items-center gap-1.5 text-xs font-medium", tone.text)}>
-          <span className={cn("size-1.5 rounded-full", tone.dot)} />
-          {tone.label}
-        </span>
+    <article className="rounded-2xl border border-border bg-card shadow-sm shadow-slate-900/[0.02]">
+      <div className="px-5 pt-5">
+        <header className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <div
+              className={cn(
+                "grid size-10 shrink-0 place-items-center rounded-full text-xs font-semibold",
+                areaColor(post.department_name),
+              )}
+              aria-hidden="true"
+            >
+              {areaInitials(post.department_name)}
+            </div>
+            <div className="min-w-0 leading-tight">
+              <p className="truncate text-sm font-semibold">Colaborador anónimo</p>
+              <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                {post.department_name ?? "General"} ·{" "}
+                <time dateTime={post.created_at ?? undefined}>{timeAgo(post.created_at)}</time>
+              </p>
+            </div>
+          </div>
+          <span className={cn("shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-medium", tone.badge)}>
+            {tone.label}
+          </span>
+        </header>
+
+        <p className="mt-4 whitespace-pre-line text-[15px] leading-relaxed text-foreground">{post.content}</p>
+
+        {showReactions && totalReactions > 0 ? (
+          <p className="mt-4 text-xs text-muted-foreground">
+            {totalReactions} {totalReactions === 1 ? "reacción" : "reacciones"}
+          </p>
+        ) : null}
       </div>
-      <p className="mt-2 text-sm leading-relaxed text-foreground">{post.content}</p>
-    </li>
+
+      {showReactions ? (
+        <footer className="mt-4 grid grid-cols-2 border-t border-border">
+          {REACTIONS.map(({ type, label, icon: Icon }) => {
+            const isMine = reactions?.mine.includes(type) ?? false;
+            const count = reactions?.counts[type] ?? 0;
+            return (
+              <button
+                key={type}
+                type="button"
+                aria-pressed={isMine}
+                onClick={() => onReact(type)}
+                className={cn(
+                  "flex items-center justify-center gap-2 py-3 text-xs font-medium transition first:border-r first:border-border hover:bg-muted/40",
+                  isMine ? "text-brand-navy" : "text-muted-foreground",
+                )}
+              >
+                <Icon className={cn("size-4", isMine && "fill-brand-navy/15")} />
+                {label}
+                {count > 0 ? <span className="tabular-nums">· {count}</span> : null}
+              </button>
+            );
+          })}
+        </footer>
+      ) : (
+        <div className="pb-5" />
+      )}
+    </article>
   );
 }
 
@@ -480,7 +621,7 @@ function SummaryCard({ posts }: { posts: FeedPost[] }) {
       <p className="text-xs text-muted-foreground">Últimos 7 días</p>
 
       <p className="mt-4 text-3xl font-semibold tabular-nums">{total}</p>
-      <p className="text-xs text-muted-foreground">{total === 1 ? "comentario recibido" : "comentarios recibidos"}</p>
+      <p className="text-xs text-muted-foreground">{total === 1 ? "publicación" : "publicaciones"}</p>
 
       {total > 0 ? (
         <>
@@ -532,8 +673,8 @@ function AreaCard({ posts }: { posts: FeedPost[] }) {
         <thead>
           <tr className="text-left text-muted-foreground">
             <th className="pb-2 font-medium">Área</th>
-            <th className="pb-2 text-right font-medium">Comentarios</th>
-            <th className="pb-2 text-right font-medium">Negativos</th>
+            <th className="pb-2 text-right font-medium">Publicaciones</th>
+            <th className="pb-2 text-right font-medium">Negativas</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-border">
@@ -541,7 +682,9 @@ function AreaCard({ posts }: { posts: FeedPost[] }) {
             <tr key={area}>
               <td className="py-2 font-medium">{area}</td>
               <td className="py-2 text-right tabular-nums">{total}</td>
-              <td className={cn("py-2 text-right tabular-nums", negative > 0 ? "text-brand-red" : "text-muted-foreground")}>
+              <td
+                className={cn("py-2 text-right tabular-nums", negative > 0 ? "text-brand-red" : "text-muted-foreground")}
+              >
                 {Math.round((negative / total) * 100)}%
               </td>
             </tr>
@@ -570,7 +713,7 @@ function PollCard({ poll, onVote }: { poll: Poll; onVote: (optionId: string) => 
               <li key={option.id}>
                 <button
                   onClick={() => onVote(option.id)}
-                  className="w-full rounded-md border border-input bg-card px-3 py-2 text-left text-xs font-medium text-foreground transition hover:border-brand-navy hover:bg-muted/40"
+                  className="w-full rounded-full border border-input bg-card px-4 py-2 text-left text-xs font-medium text-foreground transition hover:border-brand-navy hover:bg-muted/40"
                 >
                   {option.label}
                 </button>
@@ -588,10 +731,7 @@ function PollCard({ poll, onVote }: { poll: Poll; onVote: (optionId: string) => 
                 <span className="tabular-nums text-muted-foreground">{pct}%</span>
               </div>
               <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                <div
-                  className={cn("h-full", isMine ? "bg-brand-navy" : "bg-slate-300")}
-                  style={{ width: `${pct}%` }}
-                />
+                <div className={cn("h-full", isMine ? "bg-brand-navy" : "bg-slate-300")} style={{ width: `${pct}%` }} />
               </div>
             </li>
           );
