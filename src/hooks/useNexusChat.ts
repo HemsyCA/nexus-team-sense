@@ -62,6 +62,7 @@ export function useNexusChat() {
   const [sessionTitle, setSessionTitle] = useState<string | null>(null);
 
   const isTypingRef = useRef(false);
+  const welcomeRef = useRef<ChatMessage>(WELCOME_MESSAGE);
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
 
@@ -117,17 +118,19 @@ export function useNexusChat() {
             const mapped = fromRows(msgs as ChatMessageRow[]);
             setMessages(mapped);
           } else {
-            setMessages([WELCOME_MESSAGE]);
+            setMessages([welcomeRef.current]);
           }
         }
 
-        // Personaliza welcome con perfil si aplica
+        // Personaliza el saludo con el perfil, sin pisar una conversación ya cargada
         if (profile?.leadership_style) {
-          setMessages([{
+          const personalized: ChatMessage = {
             id: "welcome",
             role: "assistant",
             content: `Hola. Soy Nexus IA. He cargado tu perfil de liderazgo — veo que tu estilo predominante es **${profile.leadership_style}** con un índice de colaboración de ${profile.collaboration_index}/100. ¿En qué aspecto de tu equipo quieres profundizar hoy?`,
-          }]);
+          };
+          welcomeRef.current = personalized;
+          setMessages((prev) => (prev.length === 1 && prev[0].id === "welcome" ? [personalized] : prev));
         }
       } catch (err) {
         console.error("Error inicializando chat:", err);
@@ -161,7 +164,7 @@ export function useNexusChat() {
         const mapped = fromRows(msgs as ChatMessageRow[]);
         setMessages(mapped);
       } else {
-        setMessages([WELCOME_MESSAGE]);
+        setMessages([welcomeRef.current]);
       }
       setActiveSessionId(sessionId);
       const s = sessions.find((s) => s.id === sessionId);
@@ -183,7 +186,7 @@ export function useNexusChat() {
       setSessions((s) => [newSession, ...s].slice(0, 20));
       setActiveSessionId(newSession.id);
       setSessionTitle(newSession.title);
-      setMessages([WELCOME_MESSAGE]);
+      setMessages([welcomeRef.current]);
       return newSession.id;
     }
     return null;
