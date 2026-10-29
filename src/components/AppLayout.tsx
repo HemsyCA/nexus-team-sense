@@ -17,7 +17,7 @@ import { getInitials } from "@/lib/utils";
 
 const nav = [
   { to: "/home", label: "Inicio", icon: HomeIcon },
-  { to: "/feed", label: "Feed Anónimo", icon: MessagesSquare },
+  { to: "/feed", label: "Feed de opinión", icon: MessagesSquare },
   { to: "/chat", label: "Chat IA", icon: Sparkles },
   { to: "/dashboard", label: "Dashboard", icon: BarChart3 },
   { to: "/simulaciones", label: "Simulaciones", icon: GitBranch },

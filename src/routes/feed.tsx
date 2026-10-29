@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Filter, Heart, HandHelping, ThumbsUp, Send } from "lucide-react";
+import { ChevronDown, Lock, MessageSquare, Send, ShieldCheck } from "lucide-react";
 import { AppLayout, Card } from "@/components/AppLayout";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { requireAuthAndOnboarded } from "@/lib/auth-guard";
@@ -11,10 +11,10 @@ export const Route = createFileRoute("/feed")({
   beforeLoad: requireAuthAndOnboarded,
   head: () => ({
     meta: [
-      { title: "Feed Anónimo · NEXUS LEAD IA" },
+      { title: "Feed de opinión · NEXUS LEAD IA" },
       {
         name: "description",
-        content: "Comentarios diarios anónimos del equipo analizados por IA.",
+        content: "Comentarios anónimos del equipo sobre su experiencia laboral.",
       },
     ],
   }),
@@ -42,24 +42,27 @@ type FeedPost = {
 type PollOption = { id: string; label: string; position: number; votes: number };
 type Poll = { id: string; question: string; options: PollOption[]; myVoteOptionId: string | null };
 
-const SENTIMENT_FILTERS = [
-  { value: "all", label: "Todos" },
+const ALL_AREAS = "__all__";
+const MAX_LENGTH = 1000;
+
+const TONE_FILTERS = [
+  { value: "all", label: "Todos los tonos" },
   { value: "positive", label: "Positivo" },
   { value: "neutral", label: "Neutral" },
   { value: "negative", label: "Negativo" },
 ] as const;
 
+type ToneFilter = (typeof TONE_FILTERS)[number]["value"];
+
 function FeedPage() {
-  const [active, setActive] = useState("Todos");
-  const [sentimentFilter, setSentimentFilter] = useState<(typeof SENTIMENT_FILTERS)[number]["value"]>("all");
+  const [areaFilter, setAreaFilter] = useState<string>(ALL_AREAS);
+  const [toneFilter, setToneFilter] = useState<ToneFilter>("all");
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [areas, setAreas] = useState<string[]>([]);
   const [polls, setPolls] = useState<Poll[]>([]);
   const [draft, setDraft] = useState("");
   const [isPosting, setIsPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const filters = ["Todos", ...areas];
 
   async function loadPosts() {
     const { data: feedData, error: feedError } = await supabase
@@ -241,163 +244,311 @@ function FeedPage() {
     }
   }
 
+  const filteredPosts = posts.filter(
+    (post) =>
+      (areaFilter === ALL_AREAS || post.department_name === areaFilter) &&
+      (toneFilter === "all" || post.sentiment === toneFilter),
+  );
+  const hasFilters = areaFilter !== ALL_AREAS || toneFilter !== "all";
+
   return (
     <AppLayout
-      title="Feed Anónimo"
-      subtitle="Voces reales del equipo, identidades protegidas por código COL-###"
+      title="Feed de opinión"
+      subtitle="Comentarios anónimos del equipo sobre su experiencia laboral"
     >
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        <div className="lg:col-span-8">
-          {/* Composer */}
-          <Card className="mb-5">
-            <div className="flex items-start gap-3">
-              <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-navy text-xs font-mono font-bold text-brand-blue">
-                COL-•••
+        <section className="lg:col-span-8">
+          <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm shadow-slate-900/[0.02]">
+            {/* Encabezado + filtros */}
+            <div className="flex flex-col gap-3 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-sm font-semibold">Comentarios recientes</h2>
+                <p className="text-xs text-muted-foreground">
+                  {filteredPosts.length} {filteredPosts.length === 1 ? "comentario" : "comentarios"}
+                  {hasFilters ? " con los filtros aplicados" : ""}
+                </p>
               </div>
-              <div className="flex-1">
-                <textarea
-                  value={draft}
-                  onChange={(event) => setDraft(event.target.value)}
-                  className="w-full resize-none rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground transition focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/15"
-                  rows={3}
-                  placeholder="Comparte cómo te sentiste hoy en el trabajo… (publicación 100% anónima)"
+              <div className="flex gap-2">
+                <FilterSelect
+                  label="Área"
+                  value={areaFilter}
+                  onChange={setAreaFilter}
+                  options={[
+                    { value: ALL_AREAS, label: "Todas las áreas" },
+                    ...areas.map((area) => ({ value: area, label: area })),
+                  ]}
                 />
-                <div className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 sm:flex sm:justify-between">
-                  <p className="truncate text-[11px] text-muted-foreground">
-                    Tu identidad queda cifrada. Solo se mostrará un código anónimo.
-                  </p>
+                <FilterSelect
+                  label="Tono"
+                  value={toneFilter}
+                  onChange={(value) => setToneFilter(value as ToneFilter)}
+                  options={TONE_FILTERS}
+                />
+              </div>
+            </div>
+
+            {/* Redacción */}
+            <div className="border-b border-border bg-muted/30 px-5 py-4">
+              <label htmlFor="feed-draft" className="text-xs font-medium text-foreground">
+                Nuevo comentario anónimo
+              </label>
+              <textarea
+                id="feed-draft"
+                value={draft}
+                onChange={(event) => setDraft(event.target.value.slice(0, MAX_LENGTH))}
+                className="mt-2 w-full resize-none rounded-md border border-input bg-card px-3 py-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-brand-navy focus:ring-2 focus:ring-brand-navy/10"
+                rows={3}
+                placeholder="¿Cómo fue tu jornada? Comparte lo que funciona y lo que se puede mejorar."
+              />
+              <div className="mt-2 flex items-center justify-between gap-3">
+                <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <Lock className="size-3 shrink-0" />
+                  Tu nombre no se muestra. Solo se publica el área y la fecha.
+                </p>
+                <div className="flex shrink-0 items-center gap-3">
+                  <span className="hidden text-[11px] tabular-nums text-muted-foreground sm:inline">
+                    {draft.length}/{MAX_LENGTH}
+                  </span>
                   <button
                     type="button"
-                    onClick={() => {
-                      void handlePublish();
-                    }}
+                    onClick={() => void handlePublish()}
                     disabled={isPosting || !draft.trim()}
-                    className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-brand-navy px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-navy/90 disabled:cursor-not-allowed disabled:bg-muted/80"
+                    className="inline-flex items-center gap-2 rounded-md bg-brand-navy px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-navy/90 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <Send className="size-3.5" />
-                    {isPosting ? "Publicando…" : "Publicar"}
+                    {isPosting ? "Enviando…" : "Enviar"}
                   </button>
                 </div>
               </div>
             </div>
-          </Card>
 
-          {/* Filters */}
-          <div className="mb-5 flex items-center gap-2 overflow-x-auto pb-1">
-            <div className="flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground">
-              <Filter className="size-3" /> Filtros
-            </div>
-            {filters.map((f) => {
-              const isActive = f === active;
-              return (
-                <button
-                  key={f}
-                  onClick={() => setActive(f)}
-                  className={
-                    "shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition " +
-                    (isActive
-                      ? "border-brand-navy bg-brand-navy text-white"
-                      : "border-border bg-card text-muted-foreground hover:text-foreground")
-                  }
-                >
-                  {f}
-                </button>
-              );
-            })}
+            {error ? (
+              <div className="border-b border-brand-red/20 bg-brand-red/5 px-5 py-3 text-sm text-brand-red">
+                {error}
+              </div>
+            ) : null}
+
+            {/* Listado */}
+            {filteredPosts.length > 0 ? (
+              <ul className="divide-y divide-border">
+                {filteredPosts.map((post) => (
+                  <PostRow key={post.id} post={post} />
+                ))}
+              </ul>
+            ) : (
+              <div className="px-5 py-12 text-center">
+                <MessageSquare className="mx-auto size-6 text-muted-foreground/60" />
+                <p className="mt-3 text-sm font-medium">
+                  {hasFilters ? "Sin resultados" : "Aún no hay comentarios"}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {hasFilters
+                    ? "No hay comentarios que coincidan con los filtros seleccionados."
+                    : "Sé la primera persona en compartir cómo va tu semana."}
+                </p>
+                {hasFilters ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAreaFilter(ALL_AREAS);
+                      setToneFilter("all");
+                    }}
+                    className="mt-4 text-xs font-medium text-brand-navy underline-offset-4 hover:underline"
+                  >
+                    Limpiar filtros
+                  </button>
+                ) : null}
+              </div>
+            )}
           </div>
+        </section>
 
-          <div className="mb-5 flex items-center gap-2 overflow-x-auto pb-1">
-            <div className="flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground">
-              Sentimiento
-            </div>
-            {SENTIMENT_FILTERS.map((f) => {
-              const isActive = f.value === sentimentFilter;
-              return (
-                <button
-                  key={f.value}
-                  onClick={() => setSentimentFilter(f.value)}
-                  className={
-                    "shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition " +
-                    (isActive
-                      ? "border-brand-blue bg-brand-blue/10 text-brand-blue"
-                      : "border-border bg-card text-muted-foreground hover:text-foreground")
-                  }
-                >
-                  {f.label}
-                </button>
-              );
-            })}
-          </div>
-
-          {error ? (
-            <div className="mb-4 rounded-xl border border-brand-red/30 bg-brand-red/5 p-3 text-sm text-brand-red">
-              {error}
-            </div>
-          ) : null}
-
-          <div className="space-y-4">
-            {(() => {
-              const filtered = posts.filter(
-                (post) =>
-                  (active === "Todos" || post.department_name === active) &&
-                  (sentimentFilter === "all" || post.sentiment === sentimentFilter),
-              );
-              return filtered.length > 0 ? (
-                filtered.map((p) => <PostCard key={p.id} post={p} />)
-              ) : (
-                <Card>
-                  <p className="text-sm text-muted-foreground">
-                    {active === "Todos" && sentimentFilter === "all"
-                      ? "Aún no hay comentarios en Supabase."
-                      : "No hay comentarios que coincidan con estos filtros."}
-                  </p>
-                </Card>
-              );
-            })()}
-          </div>
-        </div>
-
-        {/* Sidebar insights */}
+        {/* Lateral */}
         <aside className="space-y-5 lg:col-span-4">
+          <SummaryCard posts={posts} />
+          <AreaCard posts={posts} />
+
           {polls.map((poll) => (
             <PollCard key={poll.id} poll={poll} onVote={(optionId) => void handleVote(poll.id, optionId)} />
           ))}
 
-          <Card>
-            <h3 className="text-sm font-bold">Emociones predominantes</h3>
-            <p className="mb-4 text-[11px] text-muted-foreground">Hoy · 124 respuestas</p>
-            <ul className="space-y-3">
-              {[
-                { label: "Cansancio", pct: 38, color: "bg-brand-red" },
-                { label: "Motivación", pct: 27, color: "bg-brand-emerald" },
-                { label: "Ansiedad", pct: 18, color: "bg-brand-amber" },
-                { label: "Calma", pct: 17, color: "bg-brand-blue" },
-              ].map((e) => (
-                <li key={e.label}>
-                  <div className="mb-1 flex items-center justify-between text-xs">
-                    <span className="font-medium">{e.label}</span>
-                    <span className="text-muted-foreground">{e.pct}%</span>
-                  </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                    <div className={`h-full ${e.color}`} style={{ width: `${e.pct}%` }} />
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </Card>
-
-          <Card className="bg-brand-purple/5">
-            <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-brand-purple/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-brand-purple">
-              IA · Tema emergente
+          <div className="rounded-2xl border border-border bg-muted/40 p-5">
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <ShieldCheck className="size-4 text-brand-emerald" />
+              Política de confidencialidad
             </div>
-            <p className="text-sm leading-relaxed">
-              Detecté que <strong>“cambios de último momento”</strong> aparece en
-              7 publicaciones hoy. Considera revisar la planificación semanal.
-            </p>
-          </Card>
+            <ul className="mt-3 space-y-2 text-xs leading-relaxed text-muted-foreground">
+              <li>· Los comentarios no muestran nombre ni correo.</li>
+              <li>· Los líderes solo ven indicadores agregados por área.</li>
+              <li>· Las áreas con menos de 3 personas no se reportan por separado.</li>
+            </ul>
+          </div>
         </aside>
       </div>
     </AppLayout>
+  );
+}
+
+const TONE_META: Record<string, { label: string; dot: string; text: string; bar: string }> = {
+  positive: { label: "Positivo", dot: "bg-brand-emerald", text: "text-brand-emerald", bar: "bg-brand-emerald" },
+  neutral: { label: "Neutral", dot: "bg-slate-400", text: "text-muted-foreground", bar: "bg-slate-300" },
+  negative: { label: "Negativo", dot: "bg-brand-red", text: "text-brand-red", bar: "bg-brand-red" },
+};
+
+function toneOf(sentiment: string | null) {
+  return TONE_META[sentiment ?? "neutral"] ?? TONE_META.neutral;
+}
+
+function formatDate(value: string | null) {
+  if (!value) return "Ahora";
+  return new Date(value).toLocaleString("es-ES", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function isWithinDays(value: string | null, days: number) {
+  return value !== null && Date.now() - new Date(value).getTime() <= days * 24 * 60 * 60 * 1000;
+}
+
+function FilterSelect({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: ReadonlyArray<{ value: string; label: string }>;
+}) {
+  return (
+    <label className="relative">
+      <span className="sr-only">{label}</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-9 appearance-none rounded-md border border-input bg-card pl-3 pr-8 text-xs font-medium text-foreground outline-none transition focus:border-brand-navy focus:ring-2 focus:ring-brand-navy/10"
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+    </label>
+  );
+}
+
+function PostRow({ post }: { post: FeedPost }) {
+  const tone = toneOf(post.sentiment);
+
+  return (
+    <li className="px-5 py-4 transition hover:bg-muted/30">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+          <span className="truncate font-medium text-foreground">{post.department_name ?? "General"}</span>
+          <span aria-hidden="true">·</span>
+          <time className="shrink-0" dateTime={post.created_at ?? undefined}>
+            {formatDate(post.created_at)}
+          </time>
+        </div>
+        <span className={cn("inline-flex shrink-0 items-center gap-1.5 text-xs font-medium", tone.text)}>
+          <span className={cn("size-1.5 rounded-full", tone.dot)} />
+          {tone.label}
+        </span>
+      </div>
+      <p className="mt-2 text-sm leading-relaxed text-foreground">{post.content}</p>
+    </li>
+  );
+}
+
+function SummaryCard({ posts }: { posts: FeedPost[] }) {
+  const recent = posts.filter((post) => isWithinDays(post.created_at, 7));
+  const total = recent.length;
+  const counts = (["positive", "neutral", "negative"] as const).map((key) => ({
+    key,
+    count: recent.filter((post) => (post.sentiment ?? "neutral") === key).length,
+  }));
+
+  return (
+    <Card className="p-5">
+      <h3 className="text-sm font-semibold">Resumen de la semana</h3>
+      <p className="text-xs text-muted-foreground">Últimos 7 días</p>
+
+      <p className="mt-4 text-3xl font-semibold tabular-nums">{total}</p>
+      <p className="text-xs text-muted-foreground">{total === 1 ? "comentario recibido" : "comentarios recibidos"}</p>
+
+      {total > 0 ? (
+        <>
+          <div className="mt-4 flex h-2 overflow-hidden rounded-full bg-muted">
+            {counts.map(({ key, count }) =>
+              count > 0 ? (
+                <div key={key} className={TONE_META[key].bar} style={{ width: `${(count / total) * 100}%` }} />
+              ) : null,
+            )}
+          </div>
+          <ul className="mt-3 space-y-1.5">
+            {counts.map(({ key, count }) => (
+              <li key={key} className="flex items-center justify-between text-xs">
+                <span className="flex items-center gap-2">
+                  <span className={cn("size-2 rounded-full", TONE_META[key].dot)} />
+                  {TONE_META[key].label}
+                </span>
+                <span className="tabular-nums text-muted-foreground">
+                  {count} · {Math.round((count / total) * 100)}%
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+    </Card>
+  );
+}
+
+function AreaCard({ posts }: { posts: FeedPost[] }) {
+  const recent = posts.filter((post) => isWithinDays(post.created_at, 7));
+  const byArea = new Map<string, { total: number; negative: number }>();
+  recent.forEach((post) => {
+    const area = post.department_name ?? "General";
+    const entry = byArea.get(area) ?? { total: 0, negative: 0 };
+    entry.total += 1;
+    if (post.sentiment === "negative") entry.negative += 1;
+    byArea.set(area, entry);
+  });
+  const rows = Array.from(byArea.entries()).sort((a, b) => b[1].total - a[1].total);
+
+  if (rows.length === 0) return null;
+
+  return (
+    <Card className="p-5">
+      <h3 className="text-sm font-semibold">Participación por área</h3>
+      <p className="text-xs text-muted-foreground">Últimos 7 días</p>
+      <table className="mt-4 w-full text-xs">
+        <thead>
+          <tr className="text-left text-muted-foreground">
+            <th className="pb-2 font-medium">Área</th>
+            <th className="pb-2 text-right font-medium">Comentarios</th>
+            <th className="pb-2 text-right font-medium">Negativos</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {rows.map(([area, { total, negative }]) => (
+            <tr key={area}>
+              <td className="py-2 font-medium">{area}</td>
+              <td className="py-2 text-right tabular-nums">{total}</td>
+              <td className={cn("py-2 text-right tabular-nums", negative > 0 ? "text-brand-red" : "text-muted-foreground")}>
+                {Math.round((negative / total) * 100)}%
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Card>
   );
 }
 
@@ -406,11 +557,9 @@ function PollCard({ poll, onVote }: { poll: Poll; onVote: (optionId: string) => 
   const hasVoted = poll.myVoteOptionId !== null;
 
   return (
-    <Card>
-      <div className="mb-1 inline-flex items-center gap-2 rounded-full bg-brand-blue/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-brand-blue">
-        Encuesta del equipo
-      </div>
-      <p className="mt-2 text-sm font-semibold">{poll.question}</p>
+    <Card className="p-5">
+      <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Encuesta</p>
+      <p className="mt-1 text-sm font-semibold">{poll.question}</p>
       <ul className="mt-4 space-y-2">
         {poll.options.map((option) => {
           const pct = totalVotes > 0 ? Math.round((option.votes / totalVotes) * 100) : 0;
@@ -421,7 +570,7 @@ function PollCard({ poll, onVote }: { poll: Poll; onVote: (optionId: string) => 
               <li key={option.id}>
                 <button
                   onClick={() => onVote(option.id)}
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-left text-xs font-medium text-foreground transition hover:border-brand-blue hover:text-brand-blue"
+                  className="w-full rounded-md border border-input bg-card px-3 py-2 text-left text-xs font-medium text-foreground transition hover:border-brand-navy hover:bg-muted/40"
                 >
                   {option.label}
                 </button>
@@ -432,15 +581,15 @@ function PollCard({ poll, onVote }: { poll: Poll; onVote: (optionId: string) => 
           return (
             <li key={option.id}>
               <div className="mb-1 flex items-center justify-between text-xs">
-                <span className={cn("font-medium", isMine && "text-brand-blue")}>
+                <span className={cn("font-medium", isMine && "text-brand-navy")}>
                   {option.label}
                   {isMine ? " · Tu voto" : ""}
                 </span>
-                <span className="text-muted-foreground">{pct}%</span>
+                <span className="tabular-nums text-muted-foreground">{pct}%</span>
               </div>
               <div className="h-1.5 overflow-hidden rounded-full bg-muted">
                 <div
-                  className={cn("h-full", isMine ? "bg-brand-blue" : "bg-muted-foreground/40")}
+                  className={cn("h-full", isMine ? "bg-brand-navy" : "bg-slate-300")}
                   style={{ width: `${pct}%` }}
                 />
               </div>
@@ -448,69 +597,11 @@ function PollCard({ poll, onVote }: { poll: Poll; onVote: (optionId: string) => 
           );
         })}
       </ul>
-      {hasVoted && (
-        <p className="mt-3 text-[11px] text-muted-foreground">{totalVotes} {totalVotes === 1 ? "voto" : "votos"} en total</p>
-      )}
+      <p className="mt-3 text-[11px] text-muted-foreground">
+        {hasVoted
+          ? `${totalVotes} ${totalVotes === 1 ? "voto" : "votos"} en total · respuesta anónima`
+          : "Tu respuesta es anónima."}
+      </p>
     </Card>
-  );
-}
-
-function PostCard({ post }: { post: FeedPost }) {
-  const time = post.created_at
-    ? new Date(post.created_at).toLocaleString("es-ES", {
-        dateStyle: "short",
-        timeStyle: "short",
-      })
-    : "Ahora";
-  const urgencyClass =
-    post.sentiment === "negative"
-      ? "bg-brand-red/10 text-brand-red"
-      : post.sentiment === "positive"
-        ? "bg-brand-emerald/10 text-brand-emerald"
-        : "bg-brand-amber/10 text-brand-amber";
-
-  return (
-    <Card>
-      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="rounded-md bg-muted px-2 py-1 font-mono text-[11px] font-bold text-foreground">
-            {post.anonymous_code ?? "COL-000"}
-          </span>
-          <span className="truncate text-[11px] text-muted-foreground">
-            {post.department_name ?? "General"} · {time}
-          </span>
-        </div>
-        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${urgencyClass}`}>
-          {post.sentiment ?? "neutral"}
-        </span>
-      </div>
-
-      <p className="mt-4 text-[15px] leading-relaxed text-foreground">“{post.content}”</p>
-      <div className="mt-5 flex flex-wrap gap-2">
-        <ReactionBtn icon={Heart} label="Burnout" count={Math.round((post.burnout_score ?? 0) * 10)} />
-        <ReactionBtn icon={HandHelping} label="Estrés" count={Math.round((post.stress_score ?? 0) * 10)} />
-        <ReactionBtn icon={ThumbsUp} label="Motivación" count={Math.round((post.motivation_score ?? 0) * 10)} />
-      </div>
-    </Card>
-  );
-}
-
-function ReactionBtn({
-  icon: Icon,
-  label,
-  count,
-}: {
-  icon: typeof Heart;
-  label: string;
-  count?: number;
-}) {
-  return (
-    <button className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-[11px] font-medium text-muted-foreground transition hover:border-brand-blue hover:text-brand-blue">
-      <Icon className="size-3.5" />
-      {label}
-      {count !== undefined && count > 0 && (
-        <span className="rounded-full bg-muted px-1.5 text-[10px] font-bold">{count}</span>
-      )}
-    </button>
   );
 }
