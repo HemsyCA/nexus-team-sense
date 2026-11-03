@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Sparkles, ArrowRight, Play, RefreshCcw } from "lucide-react";
+import { Sparkles, ArrowRight, BookOpen, Play, RefreshCcw } from "lucide-react";
 import { useState } from "react";
 import { AppLayout, Card } from "@/components/AppLayout";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { requireAuthAndOnboarded } from "@/lib/auth-guard";
 import { supabase } from "@/lib/supabase";
 import { generateAlternatives, simulateOutcome } from "@/lib/api/simulation.functions";
+import { EXAMPLE_CASES, type ExampleCase } from "@/lib/simulation-examples";
 
 export const Route = createFileRoute("/simulaciones")({
   beforeLoad: requireAuthAndOnboarded,
@@ -43,6 +44,13 @@ const METRIC_LABELS: Record<string, { label: string; better: "higher" | "lower";
   confianza: { label: "Confianza en el Líder", better: "higher", color: "bg-brand-emerald" },
 };
 
+const RISK_LABELS: Record<Outcome["risk_level"], string> = {
+  low: "bajo",
+  medium: "medio",
+  high: "alto",
+  critical: "crítico",
+};
+
 const SUGGESTIONS = ["Reducir reuniones semanales", "Implementar viernes corto", "Rotar líderes de proyecto"];
 
 const RISK_STYLES: Record<Outcome["risk_level"], string> = {
@@ -61,13 +69,23 @@ function SimPage() {
   const [isLoadingAlternatives, setIsLoadingAlternatives] = useState(false);
   const [isLoadingOutcome, setIsLoadingOutcome] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [exampleCase, setExampleCase] = useState<ExampleCase | null>(null);
 
   function resetSimulation() {
+    setExampleCase(null);
     setSessionId(null);
     setAlternatives(null);
     setChosen(null);
     setOutcome(null);
     setError(null);
+  }
+
+  // Example cases run locally: no AI call and nothing is saved.
+  function startExample(example: ExampleCase) {
+    resetSimulation();
+    setExampleCase(example);
+    setDecision(example.decision);
+    setAlternatives(example.alternatives);
   }
 
   async function handleSimulate() {
@@ -109,6 +127,13 @@ function SimPage() {
   }
 
   async function handleChoose(alternative: Alternative) {
+    const exampleAlternative = exampleCase?.alternatives.find((alt) => alt.id === alternative.id);
+    if (exampleAlternative) {
+      setChosen(alternative);
+      setOutcome(exampleAlternative.outcome);
+      return;
+    }
+
     if (!sessionId || isLoadingOutcome) return;
 
     setChosen(alternative);
@@ -158,7 +183,10 @@ function SimPage() {
         <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
           <textarea
             value={decision}
-            onChange={(e) => setDecision(e.target.value)}
+            onChange={(e) => {
+              setDecision(e.target.value);
+              if (exampleCase) resetSimulation();
+            }}
             className="resize-none rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground transition focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/15"
             rows={2}
           />
@@ -175,12 +203,45 @@ function SimPage() {
           {SUGGESTIONS.map((s) => (
             <button
               key={s}
-              onClick={() => setDecision(s)}
+              onClick={() => {
+                setDecision(s);
+                if (exampleCase) resetSimulation();
+              }}
               className="rounded-full border border-border bg-background px-3 py-1 font-medium text-muted-foreground transition hover:border-brand-blue hover:text-brand-blue"
             >
               {s}
             </button>
           ))}
+        </div>
+      </Card>
+
+      {/* Worked examples (no AI needed) */}
+      <Card className="mb-6">
+        <div className="flex items-center gap-2">
+          <BookOpen className="size-4 text-muted-foreground" />
+          <h2 className="text-sm font-semibold">Casos de ejemplo</h2>
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Recorre una simulación completa sin usar la IA. Las cifras son ilustrativas: no provienen de una empresa real.
+        </p>
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+          {EXAMPLE_CASES.map((example) => {
+            const isActive = exampleCase?.id === example.id;
+            return (
+              <button
+                key={example.id}
+                type="button"
+                onClick={() => startExample(example)}
+                aria-pressed={isActive}
+                className={`rounded-xl border p-4 text-left transition hover:border-brand-navy ${
+                  isActive ? "border-brand-navy bg-muted/50" : "border-border bg-background"
+                }`}
+              >
+                <span className="block text-sm font-medium">{example.title}</span>
+                <span className="mt-1 line-clamp-2 block text-xs text-muted-foreground">{example.decision}</span>
+              </button>
+            );
+          })}
         </div>
       </Card>
 
@@ -205,7 +266,7 @@ function SimPage() {
                 key={alt.id}
                 tone={chosen?.id === alt.id ? "ok" : "warn"}
                 tag={chosen?.id === alt.id ? "Elegida" : "Alternativa"}
-                subtitle="Propuesta de Nexus IA"
+                subtitle={exampleCase ? "Caso de ejemplo" : "Propuesta de Nexus IA"}
                 title={alt.title}
                 desc={alt.description}
                 onClick={() => void handleChoose(alt)}
@@ -226,11 +287,12 @@ function SimPage() {
             <div className="min-w-0">
               <h2 className="text-lg font-bold">Comparación de impacto</h2>
               <p className="text-xs text-muted-foreground">
-                Proyección de Nexus IA tras elegir: <strong>{chosen.title}</strong>
+                {exampleCase ? "Proyección ilustrativa tras elegir: " : "Proyección de Nexus IA tras elegir: "}
+                <strong>{chosen.title}</strong>
               </p>
             </div>
             <span className={`shrink-0 rounded-full px-3 py-1 text-[11px] font-bold uppercase ${RISK_STYLES[outcome.risk_level]}`}>
-              Riesgo {outcome.risk_level} · {outcome.risk_score}/10
+              Riesgo {RISK_LABELS[outcome.risk_level]} · {outcome.risk_score}/10
             </span>
           </div>
 
@@ -266,7 +328,7 @@ function SimPage() {
               </div>
               <div className="flex-1">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-brand-blue">
-                  Conclusión de Nexus IA
+                  {exampleCase ? "Conclusión del caso de ejemplo" : "Conclusión de Nexus IA"}
                 </p>
                 <p className="mt-2 text-sm leading-relaxed text-white/85">{outcome.summary}</p>
                 {outcome.recommendations.length > 0 && (

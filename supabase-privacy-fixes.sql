@@ -8,7 +8,49 @@
 -- cada comentario (también vía Realtime). Ahora cada usuario solo lee sus
 -- propias filas; el feed público se lee desde la vista feed_enriched, que no
 -- expone user_id.
-DROP POLICY IF EXISTS "Authenticated can read feed data" ON public.daily_feeds;
+DO $$
+DECLARE
+  p RECORD;
+BEGIN
+  -- Cualquier política de lectura abierta, sea cual sea su nombre.
+  FOR p IN
+    SELECT policyname FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'daily_feeds'
+      AND cmd IN ('SELECT', 'ALL') AND qual = 'true'
+  LOOP
+    EXECUTE format('DROP POLICY %I ON public.daily_feeds', p.policyname);
+  END LOOP;
+END $$;
+
+-- Cada usuario puede publicar y leer sus propios comentarios.
+ALTER TABLE public.daily_feeds ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users add own feeds" ON public.daily_feeds;
+DROP POLICY IF EXISTS "Users read own feeds" ON public.daily_feeds;
+CREATE POLICY "Users add own feeds" ON public.daily_feeds
+  FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users read own feeds" ON public.daily_feeds
+  FOR SELECT TO authenticated USING (auth.uid() = user_id);
+GRANT SELECT, INSERT ON public.daily_feeds TO authenticated;
+
+-- Vista pública del feed: nunca expone user_id y muestra todos los comentarios,
+-- aunque el autor no tenga un área asignada.
+DROP VIEW IF EXISTS public.feed_enriched;
+CREATE VIEW public.feed_enriched AS
+SELECT
+  df.id,
+  df.anonymous_code,
+  df.content,
+  df.sentiment,
+  df.burnout_score,
+  df.stress_score,
+  df.motivation_score,
+  df.ai_tags,
+  df.created_at,
+  d.name AS department_name,
+  d.code AS department_code
+FROM public.daily_feeds df
+LEFT JOIN public.profiles p ON p.user_id = df.user_id
+LEFT JOIN public.departments d ON d.id = COALESCE(df.department_id, p.department_id);
 
 -- 2) Vistas agregadas ------------------------------------------------------------
 DROP VIEW IF EXISTS public.org_indicators;

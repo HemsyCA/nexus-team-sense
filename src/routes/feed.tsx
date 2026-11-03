@@ -69,6 +69,9 @@ function FeedPage() {
   const [draft, setDraft] = useState("");
   const [isPosting, setIsPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  // Posts published in this visit stay visible even before the view returns them.
+  const [myNewPosts, setMyNewPosts] = useState<FeedPost[]>([]);
 
   async function getUserId() {
     const { data } = await supabase.auth.getSession();
@@ -260,10 +263,16 @@ function FeedPage() {
 
     setIsPosting(true);
     setError(null);
+    setNotice(null);
 
     try {
       const userId = await getUserId();
-      const departmentId = userId ? await getMyDepartmentId(userId) : null;
+      if (!userId) {
+        setError("Tu sesión expiró. Vuelve a iniciar sesión para publicar.");
+        return;
+      }
+      const departmentId = await getMyDepartmentId(userId);
+      const postId = crypto.randomUUID();
 
       const lowerText = trimmed.toLowerCase();
       let sentiment: "positive" | "neutral" | "negative" = "neutral";
@@ -284,6 +293,7 @@ function FeedPage() {
       }
 
       const { error: insertError } = await supabase.from("daily_feeds").insert({
+        id: postId,
         user_id: userId,
         department_id: departmentId,
         anonymous_code: `COL-${Math.floor(100 + Math.random() * 900)}`,
@@ -298,16 +308,23 @@ function FeedPage() {
       if (insertError) throw insertError;
 
       setDraft("");
+      setMyNewPosts((prev) => [
+        { id: postId, department_name: myArea, created_at: new Date().toISOString(), content: trimmed, sentiment },
+        ...prev,
+      ]);
+      setNotice("Tu comentario se publicó de forma anónima.");
       await loadPosts();
     } catch (err) {
       console.error("Error publicando feed", err);
-      setError("No se pudo publicar tu comentario. Inténtalo de nuevo.");
+      const detail = (err as { message?: string } | null)?.message;
+      setError(`No se pudo publicar tu comentario.${detail ? ` Detalle: ${detail}` : ""}`);
     } finally {
       setIsPosting(false);
     }
   }
 
-  const filteredPosts = posts.filter(
+  const allPosts = [...myNewPosts.filter((mine) => !posts.some((post) => post.id === mine.id)), ...posts];
+  const filteredPosts = allPosts.filter(
     (post) =>
       (areaFilter === ALL_AREAS || post.department_name === areaFilter) &&
       (toneFilter === "all" || post.sentiment === toneFilter),
@@ -359,6 +376,12 @@ function FeedPage() {
               </div>
             </div>
           </Card>
+
+          {notice ? (
+            <div role="status" className="rounded-xl border border-brand-emerald/30 bg-brand-emerald/10 px-4 py-3 text-sm text-foreground">
+              {notice}
+            </div>
+          ) : null}
 
           {/* Filtros */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -440,8 +463,8 @@ function FeedPage() {
 
         {/* Lateral */}
         <aside className="space-y-5 lg:col-span-4">
-          <SummaryCard posts={posts} />
-          <AreaCard posts={posts} />
+          <SummaryCard posts={allPosts} />
+          <AreaCard posts={allPosts} />
 
           {polls.map((poll) => (
             <PollCard key={poll.id} poll={poll} onVote={(optionId) => void handleVote(poll.id, optionId)} />
