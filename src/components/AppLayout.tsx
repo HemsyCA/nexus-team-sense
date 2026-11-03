@@ -8,6 +8,7 @@ import {
   Bell,
   Home as HomeIcon,
   LogOut,
+  Mic,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
@@ -17,12 +18,13 @@ import { supabase } from "@/lib/supabase";
 import { getInitials } from "@/lib/utils";
 
 const nav = [
-  { to: "/home", label: "Inicio", icon: HomeIcon },
-  { to: "/feed", label: "Feed de opinión", icon: MessagesSquare },
-  { to: "/chat", label: "Chat IA", icon: Sparkles },
-  { to: "/dashboard", label: "Dashboard", icon: BarChart3 },
-  { to: "/simulaciones", label: "Simulaciones", icon: GitBranch },
-  { to: "/configuracion", label: "Privacidad", icon: Shield },
+  { to: "/home", label: "Inicio", short: "Inicio", icon: HomeIcon },
+  { to: "/feed", label: "Feed de opinión", short: "Feed", icon: MessagesSquare },
+  { to: "/chat", label: "Chat IA", short: "Chat", icon: Sparkles },
+  { to: "/reuniones", label: "Reuniones", short: "Reunión", icon: Mic },
+  { to: "/dashboard", label: "Dashboard", short: "Panel", icon: BarChart3 },
+  { to: "/simulaciones", label: "Simulaciones", short: "Simular", icon: GitBranch },
+  { to: "/configuracion", label: "Privacidad", short: "Privac.", icon: Shield },
 ] as const;
 
 export function AppLayout({
@@ -161,7 +163,7 @@ export function AppLayout({
       </div>
 
       {/* Mobile bottom nav */}
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t border-border bg-card/95 px-2 py-2 backdrop-blur lg:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-7 border-t border-border bg-card/95 px-2 py-2 backdrop-blur lg:hidden">
         {nav.map((item) => {
           const active = pathname === item.to;
           const Icon = item.icon;
@@ -170,12 +172,12 @@ export function AppLayout({
               key={item.to}
               to={item.to}
               className={
-                "flex flex-col items-center justify-center gap-1 rounded-lg py-1.5 text-[10px] font-medium transition " +
+                "flex min-w-0 flex-col items-center justify-center gap-1 rounded-lg py-1.5 text-[10px] font-medium transition " +
                 (active ? "text-brand-blue" : "text-muted-foreground")
               }
             >
               <Icon className="size-4" />
-              <span className="truncate">{item.label.split(" ")[0]}</span>
+              <span className="w-full truncate text-center">{item.short}</span>
             </Link>
           );
         })}

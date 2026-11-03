@@ -18,6 +18,7 @@ import { Route as HomeRouteImport } from './routes/home'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as PerfilRouteImport } from './routes/perfil'
 import { Route as RegisterRouteImport } from './routes/register'
+import { Route as ReunionesRouteImport } from './routes/reuniones'
 import { Route as SimulacionesRouteImport } from './routes/simulaciones'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
@@ -68,6 +69,11 @@ const RegisterRoute = RegisterRouteImport.update({
   path: '/register',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ReunionesRoute = ReunionesRouteImport.update({
+  id: '/reuniones',
+  path: '/reuniones',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SimulacionesRoute = SimulacionesRouteImport.update({
   id: '/simulaciones',
   path: '/simulaciones',
@@ -99,6 +105,7 @@ export interface FileRoutesByFullPath {
   '/onboarding': typeof OnboardingRouteWithChildren
   '/perfil': typeof PerfilRoute
   '/register': typeof RegisterRoute
+  '/reuniones': typeof ReunionesRoute
   '/simulaciones': typeof SimulacionesRoute
   '/verify-email': typeof VerifyEmailRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -114,6 +121,7 @@ export interface FileRoutesByTo {
   '/onboarding': typeof OnboardingRouteWithChildren
   '/perfil': typeof PerfilRoute
   '/register': typeof RegisterRoute
+  '/reuniones': typeof ReunionesRoute
   '/simulaciones': typeof SimulacionesRoute
   '/verify-email': typeof VerifyEmailRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -130,6 +138,7 @@ export interface FileRoutesById {
   '/onboarding': typeof OnboardingRouteWithChildren
   '/perfil': typeof PerfilRoute
   '/register': typeof RegisterRoute
+  '/reuniones': typeof ReunionesRoute
   '/simulaciones': typeof SimulacionesRoute
   '/verify-email': typeof VerifyEmailRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -147,6 +156,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/perfil'
     | '/register'
+    | '/reuniones'
     | '/simulaciones'
     | '/verify-email'
     | '/auth/callback'
@@ -162,6 +172,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/perfil'
     | '/register'
+    | '/reuniones'
     | '/simulaciones'
     | '/verify-email'
     | '/auth/callback'
@@ -177,6 +188,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/perfil'
     | '/register'
+    | '/reuniones'
     | '/simulaciones'
     | '/verify-email'
     | '/auth/callback'
@@ -193,6 +205,7 @@ export interface RootRouteChildren {
   OnboardingRoute: typeof OnboardingRouteWithChildren
   PerfilRoute: typeof PerfilRoute
   RegisterRoute: typeof RegisterRoute
+  ReunionesRoute: typeof ReunionesRoute
   SimulacionesRoute: typeof SimulacionesRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
@@ -263,6 +276,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RegisterRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/reuniones': {
+      id: '/reuniones'
+      path: '/reuniones'
+      fullPath: '/reuniones'
+      preLoaderRoute: typeof ReunionesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/simulaciones': {
       id: '/simulaciones'
       path: '/simulaciones'
@@ -316,6 +336,7 @@ const rootRouteChildren: RootRouteChildren = {
   OnboardingRoute: OnboardingRouteWithChildren,
   PerfilRoute: PerfilRoute,
   RegisterRoute: RegisterRoute,
+  ReunionesRoute: ReunionesRoute,
   SimulacionesRoute: SimulacionesRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   AuthCallbackRoute: AuthCallbackRoute,

@@ -141,7 +141,7 @@ function RootComponent() {
 }
 
 // Pages inside AppLayout (and the chat) already show the toggle in their header.
-const APP_SHELL_PATHS = ["/home", "/feed", "/chat", "/dashboard", "/simulaciones", "/configuracion", "/perfil"];
+const APP_SHELL_PATHS = ["/home", "/feed", "/chat", "/reuniones", "/dashboard", "/simulaciones", "/configuracion", "/perfil"];
 
 function FloatingThemeToggle() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
