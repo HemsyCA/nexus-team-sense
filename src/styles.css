@@ -79,6 +79,11 @@
   --brand-red: oklch(0.64 0.22 25);          /* alert */
   /* Large dark surfaces (sidebar, hero panels): stay dark in both themes */
   --brand-panel: var(--brand-navy);
+
+  /* Chart series (validated for colour-blind separation on this surface) */
+  --chart-1: #2a78d6;
+  --chart-2: #eb6834;
+  --chart-3: #6250d6;
 }
 
 .dark {
@@ -101,6 +106,10 @@
   --brand-navy: oklch(0.58 0.16 270);
   --brand-bg: oklch(0.16 0.02 265);
   --brand-panel: oklch(0.12 0.03 265);
+
+  --chart-1: #3987e5;
+  --chart-2: #d95926;
+  --chart-3: #9085e9;
 }
 
 @layer base {
