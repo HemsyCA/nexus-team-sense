@@ -1,10 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { AlertCircle, AlertTriangle, CheckCircle2, Download, Lock, type LucideIcon } from "lucide-react";
+import { AlertCircle, AlertTriangle, CheckCircle2, Download, Lock } from "lucide-react";
 import { useEffect, useState } from "react";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { AppLayout, Card } from "@/components/AppLayout";
+import { KpiGrid } from "@/components/KpiGrid";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { requireAuthAndOnboarded } from "@/lib/auth-guard";
+import { fmt, num, type AlertItem, type OrgIndicators } from "@/lib/indicators";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 
@@ -25,19 +27,6 @@ export const Route = createFileRoute("/dashboard")({
     </ProtectedRoute>
   ),
 });
-
-type OrgIndicators = {
-  climate_index: number | null;
-  burnout_avg: number | null;
-  stress_avg: number | null;
-  motivation_avg: number | null;
-  comments_7d: number | null;
-  comments_24h: number | null;
-  positive_count: number | null;
-  neutral_count: number | null;
-  negative_count: number | null;
-  rotation_risk_score: number | null;
-};
 
 type DepartmentIndicator = {
   department_id: string;
@@ -64,43 +53,11 @@ type TrendPoint = {
   comments: number | null;
 };
 
-type AlertItem = {
-  type: string;
-  message: string;
-  department: string;
-  severity: string;
-};
-
-type Status = { label: string; icon: LucideIcon; className: string };
-
-const STATUS = {
-  good: { label: "Favorable", icon: CheckCircle2, className: "text-brand-emerald" },
-  warning: { label: "Atención", icon: AlertCircle, className: "text-brand-amber" },
-  critical: { label: "Crítico", icon: AlertTriangle, className: "text-brand-red" },
-} satisfies Record<string, Status>;
-
-// Thresholds on the 0-10 scale; `higherIsBetter` metrics are mirrored.
-function statusOf(value: number | null, higherIsBetter: boolean): Status | null {
-  if (value === null) return null;
-  const risk = higherIsBetter ? 10 - value : value;
-  if (risk <= 4) return STATUS.good;
-  if (risk <= 6.5) return STATUS.warning;
-  return STATUS.critical;
-}
-
 const SERIES = [
   { key: "motivation_avg", label: "Motivación", color: "var(--chart-1)" },
   { key: "stress_avg", label: "Estrés", color: "var(--chart-2)" },
   { key: "burnout_avg", label: "Burnout", color: "var(--chart-3)" },
 ] as const;
-
-function num(value: unknown): number | null {
-  if (value === null || value === undefined || value === "") return null;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : null;
-}
-
-const fmt = (value: number | null, digits = 1) => (value === null ? "—" : value.toFixed(digits));
 
 function formatDay(day: string) {
   return new Date(`${day.slice(0, 10)}T00:00:00`).toLocaleDateString("es-PE", { day: "numeric", month: "short" });
@@ -197,36 +154,6 @@ function DashboardPage() {
     return () => window.clearInterval(interval);
   }, []);
 
-  const climate = num(org?.climate_index);
-  const stress = num(org?.stress_avg);
-  const motivation = num(org?.motivation_avg);
-  const burnout = num(org?.burnout_avg);
-
-  const kpis = [
-    {
-      label: "Índice de clima",
-      value: climate === null ? "—" : String(Math.round(climate)),
-      scale: "/ 100",
-      status: statusOf(climate === null ? null : climate / 10, true),
-      hint: "Índice compuesto",
-    },
-    { label: "Estrés", value: fmt(stress), scale: "/ 10", status: statusOf(stress, false), hint: "Promedio del equipo" },
-    {
-      label: "Motivación",
-      value: fmt(motivation),
-      scale: "/ 10",
-      status: statusOf(motivation, true),
-      hint: "Promedio del equipo",
-    },
-    {
-      label: "Riesgo de burnout",
-      value: fmt(burnout),
-      scale: "/ 10",
-      status: statusOf(burnout, false),
-      hint: "Según los comentarios",
-    },
-  ];
-
   return (
     <AppLayout title="Dashboard" subtitle="Indicadores agregados del equipo · sin identidades">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
@@ -257,32 +184,7 @@ function DashboardPage() {
         </div>
       ) : null}
 
-      {/* KPIs */}
-      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Indicadores principales">
-        {kpis.map((kpi) => {
-          const StatusIcon = kpi.status?.icon;
-          return (
-            <Card key={kpi.label} className="p-5">
-              <p className="text-sm font-medium text-muted-foreground">{kpi.label}</p>
-              <p className="mt-3 flex items-baseline gap-1.5">
-                <span className="text-4xl font-semibold tabular-nums tracking-tight">{loading ? "…" : kpi.value}</span>
-                <span className="text-sm text-muted-foreground">{kpi.scale}</span>
-              </p>
-              <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-3 text-xs">
-                <span className="truncate text-muted-foreground">{kpi.hint}</span>
-                {kpi.status && StatusIcon ? (
-                  <span className="flex shrink-0 items-center gap-1 font-medium text-foreground">
-                    <StatusIcon className={cn("size-3.5", kpi.status.className)} />
-                    {kpi.status.label}
-                  </span>
-                ) : (
-                  <span className="shrink-0 text-muted-foreground">Sin datos</span>
-                )}
-              </div>
-            </Card>
-          );
-        })}
-      </section>
+      <KpiGrid org={org} loading={loading} />
 
       {/* Tendencia + tono */}
       <section className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-12">
@@ -315,8 +217,8 @@ function DashboardPage() {
           </ul>
         ) : (
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            <CheckCircle2 className="size-4 text-brand-emerald" />
-            No hay alertas activas.
+            {error ? null : <CheckCircle2 className="size-4 text-brand-emerald" />}
+            {error ? "Sin información de alertas por el momento." : "No hay alertas activas."}
           </p>
         )}
       </Card>

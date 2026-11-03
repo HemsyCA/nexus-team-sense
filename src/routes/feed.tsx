@@ -4,6 +4,7 @@ import { HandHeart, Lock, MessageSquare, Send, ShieldCheck, ThumbsUp, UserRound 
 import { AppLayout, Card } from "@/components/AppLayout";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { requireAuthAndOnboarded } from "@/lib/auth-guard";
+import { timeAgo } from "@/lib/indicators";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 
@@ -506,18 +507,6 @@ function areaColor(area: string | null) {
   let hash = 0;
   for (const char of key) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
   return AVATAR_COLORS[hash % AVATAR_COLORS.length];
-}
-
-function timeAgo(value: string | null) {
-  if (!value) return "ahora";
-  const minutes = Math.floor((Date.now() - new Date(value).getTime()) / 60_000);
-  if (minutes < 1) return "ahora";
-  if (minutes < 60) return `hace ${minutes} min`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `hace ${hours} h`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return days === 1 ? "ayer" : `hace ${days} días`;
-  return new Date(value).toLocaleDateString("es-ES", { day: "numeric", month: "short" });
 }
 
 function isWithinDays(value: string | null, days: number) {
